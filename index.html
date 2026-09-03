@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cadence - AI Running Coach</title>
+<meta name="description" content="Cadence: an adaptive AI running coach. Plans that adjust to your training, GPS tracking, coaching paces.">
+<meta name="theme-color" content="#050506">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cadence">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="view"></main>
+
+  <nav class="tabbar" id="tabbar" style="display:none">
+    <button class="tab on" data-v="today" aria-label="Today">
+      <svg viewBox="0 0 24 24"><path d="M4.5 11 12 4.8 19.5 11M6.7 9.8V19h10.6V9.8"/><path d="M10.5 19v-4.2h3V19"/></svg>
+      <span>Today</span>
+    </button>
+    <button class="tab" data-v="plan" aria-label="Plan">
+      <svg viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5V7M15.5 3.5V7"/></svg>
+      <span>Plan</span>
+    </button>
+    <button class="tab fab" data-v="run" aria-label="Run">
+      <div class="fabring">
+        <svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg>
+      </div>
+      <span>Run</span>
+    </button>
+    <button class="tab" data-v="stats" aria-label="Stats">
+      <svg viewBox="0 0 24 24"><path d="M5 20v-8M10 20V5M15 20v-6M20 20V8"/></svg>
+      <span>Stats</span>
+    </button>
+    <button class="tab" data-v="you" aria-label="You">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.6"/><path d="M5.2 19.5c1.4-3.4 3.9-5.2 6.8-5.2s5.4 1.8 6.8 5.2"/></svg>
+      <span>You</span>
+    </button>
+  </nav>
+
+  <div id="sheetwrap"><div id="sheet"></div></div>
+  <div id="toast"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="engine.js"></script>
+  <script src="sync.js"></script>
+  <script src="ai.js"></script>
+  <script src="app.js"></script>
+  <script>
+    // Tab bar only after onboarding
+    (function watchTabs() {
+      const has = !!localStorage.getItem('cadence.v1');
+      document.getElementById('tabbar').style.display = has ? '' : 'none';
+      if (!has) setTimeout(watchTabs, 400);
+    })();
+  </script>
+</body>
+</html>
