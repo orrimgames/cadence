@@ -11,7 +11,7 @@ const AI = (() => {
   let state = 'idle';           // idle | loading | ready | failed
   let loadPromise = null;
   let inst = null;              // { model, tokenizer, device }
-  let stats = { bytes: 0, loadMs: 0, device: null, lastTokPerSec: null };
+  let stats = { bytes: 0, loadMs: 0, device: null, lastTokPerSec: null, lastError: null };
   const listeners = [];
 
   function status() { return state; }
@@ -36,8 +36,9 @@ const AI = (() => {
     state = 'loading'; emit();
     const t0 = performance.now();
     loadPromise = (async () => {
+      const seen = {};
       const onProgress = p => {
-        if (p && p.status === 'progress' && p.loaded) stats.bytes = Math.max(stats.bytes, p.total || p.loaded);
+        if (p && p.file && p.status === 'progress') { seen[p.file] = Math.max(seen[p.file] || 0, p.loaded || 0); stats.bytes = Object.values(seen).reduce((a, b) => a + b, 0); }
       };
       try {
         const T = await import(TJS);
@@ -72,12 +73,13 @@ const AI = (() => {
       const t0 = performance.now();
       const out = await model.generate({ ...inputs, max_new_tokens: maxNew || 16, do_sample: false });
       const ms = performance.now() - t0;
-      const ids = out.sequences.tolist()[0];
+      const seq = out.sequences ? out.sequences : out;
+      const ids = seq.tolist()[0];
       const nTok = ids.length - inLen;
       const text = tokenizer.decode(ids.slice(inLen), { skip_special_tokens: true }).trim();
       if (nTok > 0 && ms > 0) stats.lastTokPerSec = Math.round(nTok / (ms / 1000) * 10) / 10;
       return text;
-    } catch (e) { return null; }
+    } catch (e) { stats.lastError = String((e && e.message) || e).slice(0, 200); return null; }
   }
 
   function cleanNameGuess(s) {
