@@ -1118,6 +1118,18 @@ function renderYou() {
     </div>`;
 }
 const youState = { upMin: 10, upSec: 0 };
+function stepper(key, min, max, unit) {
+  return `<div class="stepper">
+    <button onclick="obBump('${key}',-1,${min},${max})">−</button>
+    <div><b id="obst_${key}">${String(ob[key]).padStart(2, '0')}</b><span>${unit}</span></div>
+    <button onclick="obBump('${key}',1,${min},${max})">+</button>
+  </div>`;
+}
+function obBump(key, d, min, max) {
+  ob[key] = Math.min(max, Math.max(min, ob[key] + d));
+  const el = $('#obst_' + key);
+  if (el) el.textContent = String(ob[key]).padStart(2, '0');
+}
 function stepperYou(key, min, max, unit) {
   return `<div class="stepper">
     <button onclick="youBump('${key}',-1,${min},${max})">−</button>
