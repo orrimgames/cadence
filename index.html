@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cadence - AI Running Coach</title>
+<meta name="description" content="Cadence: an adaptive AI running coach. Plans that adjust to your training, GPS tracking, coaching paces.">
+<meta name="theme-color" content="#0A0C0E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cadence">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="view"></main>
+
+  <nav class="tabbar" id="tabbar" style="display:none">
+    <button class="tab on" data-v="today" aria-label="Today">
+      <svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5M5.5 10.5V20h13v-9.5"/></svg>
+      <span>Today</span>
+    </button>
+    <button class="tab" data-v="plan" aria-label="Plan">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg>
+      <span>Plan</span>
+    </button>
+    <button class="tab fab" data-v="run" aria-label="Run">
+      <div class="fabring">
+        <svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg>
+      </div>
+      <span>Run</span>
+    </button>
+    <button class="tab" data-v="stats" aria-label="Stats">
+      <svg viewBox="0 0 24 24"><path d="M4.5 20V10M10 20V4.5M15.5 20v-9M21 20V7"/></svg>
+      <span>Stats</span>
+    </button>
+    <button class="tab" data-v="you" aria-label="You">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c1.5-4 4.5-6 7.5-6s6 2 7.5 6"/></svg>
+      <span>You</span>
+    </button>
+  </nav>
+
+  <div id="sheetwrap"><div id="sheet"></div></div>
+  <div id="toast"></div>
+
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+  <script>
+    // Tab bar only after onboarding
+    (function watchTabs() {
+      const has = !!localStorage.getItem('cadence.v1');
+      document.getElementById('tabbar').style.display = has ? '' : 'none';
+      if (!has) setTimeout(watchTabs, 400);
+    })();
+  </script>
+</body>
+</html>
