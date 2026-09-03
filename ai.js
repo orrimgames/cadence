@@ -1,11 +1,13 @@
 'use strict';
 /* Cadence AI - optional on-device common sense.
-   LFM2-1.2B (q4f16) via Transformers.js, WebGPU with WASM fallback.
-   Fully lazy and optional: the app works 100% without it. Deterministic
-   parsers stay the permanent fallback; AI only refines free-text answers. */
+   LFM2-1.2B via Transformers.js: WebGPU (q4f16) when a real GPU adapter
+   resolves, otherwise WASM (q4). Fully lazy and optional: the app works
+   100% without it. Deterministic parsers stay the permanent fallback;
+   AI only refines free-text answers. */
 const AI = (() => {
   const MODEL_ID = 'onnx-community/LFM2-1.2B-ONNX';
   const REV = '7f871660813dc1f34f0d304c77506c5fbdb440a0';
+  const TJS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
   let state = 'idle';           // idle | loading | ready | failed
   let loadPromise = null;
   let inst = null;              // { model, tokenizer, device }
@@ -17,8 +19,20 @@ const AI = (() => {
   function onStatus(fn) { listeners.push(fn); }
   function emit() { listeners.forEach(f => { try { f(status()); } catch (e) {} }); }
 
+  async function pickDevices() {
+    // WebGPU only when a real adapter resolves; CPU-only devices go straight
+    // to WASM so they never touch the webgpu-only q4f16 weights.
+    if (navigator.gpu) {
+      try {
+        const adapter = await navigator.gpu.requestAdapter();
+        if (adapter) return [['webgpu', 'q4f16'], ['wasm', 'q4']];
+      } catch (e) { /* fall through */ }
+    }
+    return [['wasm', 'q4']];
+  }
+
   function warmup() {
-    if (state !== 'idle') return;
+    if (state !== 'idle') return loadPromise;
     state = 'loading'; emit();
     const t0 = performance.now();
     loadPromise = (async () => {
@@ -26,9 +40,9 @@ const AI = (() => {
         if (p && p.status === 'progress' && p.loaded) stats.bytes = Math.max(stats.bytes, p.total || p.loaded);
       };
       try {
-        const T = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2');
+        const T = await import(TJS);
         const tokenizer = await T.AutoTokenizer.from_pretrained(MODEL_ID, { revision: REV, progress_callback: onProgress });
-        const devices = navigator.gpu ? [['webgpu', 'q4f16'], ['wasm', 'q4']] : [['wasm', 'q4']];
+        const devices = await pickDevices();
         let model = null, device = null;
         for (const [d, dt] of devices) {
           try { model = await T.AutoModelForCausalLM.from_pretrained(MODEL_ID, { revision: REV, dtype: dt, device: d, progress_callback: onProgress }); device = d + '/' + dt; break; }
@@ -52,14 +66,15 @@ const AI = (() => {
     if (state !== 'ready' || !inst) return null;
     try {
       const { model, tokenizer } = inst;
-      const inputs = tokenizer.apply_chat_template(messages, { add_generation_prompt: true, return_dict: true });
+      const prompt = tokenizer.apply_chat_template(messages, { tokenize: false, add_generation_prompt: true });
+      const inputs = tokenizer(prompt);
       const inLen = inputs.input_ids.dims[1];
       const t0 = performance.now();
       const out = await model.generate({ ...inputs, max_new_tokens: maxNew || 16, do_sample: false });
-      const gen = out.slice(null, [inLen, null]);
-      const text = tokenizer.decode(gen[0], { skip_special_tokens: true }).trim();
-      const nTok = gen.dims[1];
       const ms = performance.now() - t0;
+      const ids = out.sequences.tolist()[0];
+      const nTok = ids.length - inLen;
+      const text = tokenizer.decode(ids.slice(inLen), { skip_special_tokens: true }).trim();
       if (nTok > 0 && ms > 0) stats.lastTokPerSec = Math.round(nTok / (ms / 1000) * 10) / 10;
       return text;
     } catch (e) { return null; }
