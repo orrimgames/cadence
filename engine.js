@@ -1,0 +1,560 @@
+'use strict';
+/* Cadence coaching engine.
+   Pure functions only - no DOM, no storage. This is the piece that ports
+   1:1 to Swift when the app goes native. */
+const Engine = (() => {
+
+  const MI = 1609.34; // meters per mile
+
+  /* ---------- VDOT (Jack Daniels oxygen-cost model) ---------- */
+
+  function vdotFromRace(distMeters, timeSec) {
+    const t = timeSec / 60;          // minutes
+    const v = distMeters / t;        // m/min
+    const pct = 0.8 + 0.1894393 * Math.exp(-0.012778 * t) + 0.2989558 * Math.exp(-0.1932605 * t);
+    const vo2 = -4.60 + 0.182258 * v + 0.000104 * v * v;
+    return vo2 / pct;
+  }
+
+  // Treat a self-reported comfortable pace as ~72% of VO2max effort.
+  function vdotFromEasyPace(secPerMi) {
+    const v = MI / (secPerMi / 60);
+    const vo2 = -4.60 + 0.182258 * v + 0.000104 * v * v;
+    return vo2 / 0.72;
+  }
+
+  // Solve the oxygen-cost quadratic for the pace (sec/mi) at a fraction of VDOT.
+  function paceSecPerMi(vdot, frac) {
+    const target = vdot * frac;
+    const a = 0.000104, b = 0.182258, c = -(target + 4.6);
+    const v = (-b + Math.sqrt(b * b - 4 * a * c)) / (2 * a); // m/min
+    return MI / v * 60;
+  }
+
+  function paceZones(vdot) {
+    return {
+      easy:      { lo: paceSecPerMi(vdot, 0.76), hi: paceSecPerMi(vdot, 0.66) }, // hi = slower
+      marathon:  paceSecPerMi(vdot, 0.80),
+      threshold: paceSecPerMi(vdot, 0.85),
+      interval:  paceSecPerMi(vdot, 0.95),
+      rep:       paceSecPerMi(vdot, 1.05),
+    };
+  }
+
+  // Predict finish time (sec) for distMeters at a given VDOT, bisection on the VDOT curve.
+  function predictRaceTime(vdot, distMeters) {
+    let lo = distMeters / 6.5, hi = distMeters / 1.2; // sec, sane bounds
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2;
+      if (vdotFromRace(distMeters, mid) > vdot) lo = mid; else hi = mid;
+    }
+    return Math.round((lo + hi) / 2);
+  }
+
+  // Riegel projection between two performances.
+  function riegel(timeSec, fromMeters, toMeters) {
+    return timeSec * Math.pow(toMeters / fromMeters, 1.06);
+  }
+
+  /* ---------- Plan generation ---------- */
+
+  const GOALS = {
+    fitness:  { label: 'Get fit',       raceMi: null,   baseVol: 8,  longCap: 8  },
+    '5k':     { label: '5K',            raceMi: 3.107,  baseVol: 12, longCap: 7  },
+    '10k':    { label: '10K',           raceMi: 6.214,  baseVol: 15, longCap: 10 },
+    half:     { label: 'Half marathon', raceMi: 13.109, baseVol: 18, longCap: 13 },
+    marathon: { label: 'Marathon',      raceMi: 26.219, baseVol: 24, longCap: 20 },
+  };
+
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  function addDays(dateISO, n) {
+    const d = new Date(dateISO + 'T12:00:00');
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function todayISO() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function daysBetween(aISO, bISO) {
+    return Math.round((new Date(bISO + 'T12:00:00') - new Date(aISO + 'T12:00:00')) / 86400000);
+  }
+
+  function fmtPace(secPerMi) {
+    if (!isFinite(secPerMi) || secPerMi <= 0) return '-';
+    const m = Math.floor(secPerMi / 60), s = Math.round(secPerMi % 60);
+    return m + ':' + String(s).padStart(2, '0');
+  }
+  function fmtPaceRange(lo, hi) { return fmtPace(lo) + '-' + fmtPace(hi); }
+  function fmtClock(sec) {
+    sec = Math.round(sec);
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    return m + ':' + String(s).padStart(2, '0');
+  }
+  function fmtMi(mi) {
+    return (Math.round(mi * 10) / 10).toString().replace(/\.0$/, '');
+  }
+
+  // Interval menu per goal, cycled by week index. distMi includes 1 mi warm-up + 1 mi cool-down.
+  function intervalSession(goal, phase, weekIdx, z) {
+    const menus = {
+      '5k':     [ {r: '6 x 400m', reps: 6, m: 400}, {r: '5 x 600m', reps: 5, m: 600}, {r: '4 x 800m', reps: 4, m: 800}, {r: '3 x 1000m', reps: 3, m: 1000} ],
+      '10k':    [ {r: '5 x 1000m', reps: 5, m: 1000}, {r: '6 x 800m', reps: 6, m: 800}, {r: '4 x 1200m', reps: 4, m: 1200}, {r: '3 x 1600m', reps: 3, m: 1600} ],
+      half:     [ {r: '5 x 1000m', reps: 5, m: 1000}, {r: '4 x 1600m', reps: 4, m: 1600}, {r: '6 x 800m', reps: 6, m: 800}, {r: '3 x 2000m', reps: 3, m: 2000} ],
+      marathon: [ {r: '6 x 800m', reps: 6, m: 800}, {r: '5 x 1000m', reps: 5, m: 1000}, {r: '4 x 1600m', reps: 4, m: 1600}, {r: '8 x 400m', reps: 8, m: 400} ],
+      fitness:  [ {r: '6 x 1 min pickups', reps: 6, m: 0}, {r: '8 x 30s strides', reps: 8, m: 0}, {r: '5 x 2 min steady', reps: 5, m: 0}, {r: '6 x 400m', reps: 6, m: 400} ],
+    };
+    const menu = menus[goal] || menus['5k'];
+    const item = menu[weekIdx % menu.length];
+    const fastMi = item.m ? (item.reps * item.m / MI) : item.reps * 0.09;
+    const jogMi = item.m ? ((item.reps - 1) * 400 / MI) : item.reps * 0.09;
+    const dist = 2 + fastMi + jogMi;
+    const desc = item.m
+      ? '1 mi warm-up, then ' + item.r + ' at interval pace (' + fmtPace(z.interval) + '/mi) with 400m slow jogs, 1 mi cool-down.'
+      : '1 mi warm-up, then ' + item.r + ' around interval effort (' + fmtPace(z.interval) + '/mi) with easy recovery jogs, 1 mi cool-down.';
+    return { title: item.r + ' intervals', distMi: Math.round(dist * 10) / 10, desc: desc, zone: 'interval' };
+  }
+
+  function tempoSession(goal, phase, weekIdx, z) {
+    let min;
+    if (goal === 'marathon' && phase === 'build') {
+      const reps = 2 + (weekIdx % 2);
+      return {
+        title: reps + ' x 2 mi at marathon pace',
+        distMi: Math.min(8, 2 + reps * 2 + 1 + (reps - 1) * 0.5),
+        desc: '1 mi warm-up, ' + reps + ' x 2 mi at marathon pace (' + fmtPace(z.marathon) + '/mi) with half-mile easy between, 1 mi cool-down.',
+        zone: 'marathon',
+      };
+    }
+    if (goal === 'half' && phase === 'build') min = 22 + (weekIdx % 3) * 4;
+    else if (phase === 'base') min = 15 + (weekIdx % 2) * 5;
+    else min = 20 + (weekIdx % 3) * 5;
+    const tempoMi = min * 60 / z.threshold; // minutes * 60 / secPerMi
+    return {
+      title: min + ' min tempo',
+      distMi: Math.round((2 + tempoMi) * 10) / 10,
+      desc: '1 mi warm-up, ' + min + ' min at threshold pace (' + fmtPace(z.threshold) + '/mi) - comfortably hard, controlled - 1 mi cool-down.',
+      zone: 'threshold',
+    };
+  }
+
+  function easySession(distMi, z, weekIdx, slot) {
+    const notes = [
+      'Conversational the whole way. If you can not chat, slow down.',
+      'Keep this genuinely easy - it builds the engine that race day draws on.',
+      'Relaxed and smooth. Finish feeling like you could go again.',
+      'Easy effort, tall posture, quick light feet.',
+    ];
+    return {
+      title: 'Easy run',
+      distMi: Math.round(distMi * 10) / 10,
+      desc: fmtMi(distMi) + ' mi at easy pace (' + fmtPaceRange(z.easy.lo, z.easy.hi) + '/mi). ' + notes[(weekIdx + slot) % notes.length],
+      zone: 'easy',
+    };
+  }
+
+  function longSession(distMi, goal, z, weekIdx) {
+    const notes = {
+      fitness:  'Long slow distance. The pace does not matter - the time on feet does.',
+      '5k':     'Long run for strength. Stay easy; this supports everything else.',
+      '10k':    'Long run, all conversational. Finish strong if you feel good.',
+      half:     'Long run. Practice fueling after 45 min if this is over 8 miles.',
+      marathon: 'Long run. Start slower than you think. Fuel every 40 min after the first hour.',
+    };
+    return {
+      title: 'Long run',
+      distMi: Math.round(distMi * 10) / 10,
+      desc: fmtMi(distMi) + ' mi at easy pace (' + fmtPaceRange(z.easy.lo, z.easy.hi) + '/mi). ' + notes[goal],
+      zone: 'easy',
+    };
+  }
+
+  const PHASES = { base: 'Base', build: 'Build', peak: 'Peak', taper: 'Taper', race: 'Race week' };
+
+  // profile: {goal, raceDateISO|null, daysPerWeek, longDay(0-6 Sun..Sat), vdot, weeklyMiles|null}
+  function generatePlan(profile) {
+    const g = GOALS[profile.goal] || GOALS.fitness;
+    const z = paceZones(profile.vdot);
+    const start = todayISO();
+    const isRace = g.raceMi != null && profile.raceDateISO;
+
+    let nWeeks, raceWeekIdx = -1;
+    if (isRace) {
+      const d = daysBetween(start, profile.raceDateISO);
+      raceWeekIdx = Math.max(0, Math.floor(d / 7));
+      nWeeks = Math.min(20, raceWeekIdx + 1);
+      raceWeekIdx = nWeeks - 1; // race lands in the final scheduled week
+    } else {
+      nWeeks = 12;
+    }
+
+    const baseVol = Math.max(profile.weeklyMiles || 0, g.baseVol);
+    const volCap = baseVol * 1.9;
+    const baseLong = Math.min(Math.round(baseVol * 0.34 * 2) / 2, g.longCap);
+
+    // Day offsets from the long-run day: quality +3, tempo +5, easies +1,+2,+4.
+    const n = profile.daysPerWeek;
+    const offsets = [{ off: 3, kind: 'quality' }];
+    if (n >= 4) offsets.push({ off: 5, kind: 'tempo' });
+    offsets.push({ off: 1, kind: 'easy' });
+    if (n >= 5) offsets.push({ off: 2, kind: 'easy' });
+    if (n >= 6) offsets.push({ off: 4, kind: 'easy' });
+    offsets.push({ off: 0, kind: 'long' });
+
+    const weeks = [];
+    let vol = baseVol, longMi = baseLong;
+
+    for (let w = 0; w < nWeeks; w++) {
+      let phase;
+      if (isRace) {
+        if (w === raceWeekIdx) phase = 'race';
+        else if (w === raceWeekIdx - 1) phase = 'taper';
+        else if (w === raceWeekIdx - 2) phase = 'peak';
+        else if (w < Math.floor((raceWeekIdx - 2) / 2)) phase = 'base';
+        else phase = 'build';
+      } else {
+        phase = w < 4 ? 'base' : (w < 8 ? 'build' : 'peak');
+      }
+
+      // Weekly volume progresses recursively; the long run follows its own trajectory.
+      if (w > 0) {
+        if (phase === 'race') vol = vol * 0.5;
+        else if (phase === 'taper') vol = vol * 0.7;
+        else if (w % 4 === 3) vol = vol * 0.8;             // cutback
+        else vol = Math.min(vol * 1.07, volCap);           // progression
+      }
+      const step = (profile.goal === 'half' || profile.goal === 'marathon') ? 1 : (profile.goal === '10k' ? 0.75 : 0.5);
+      longMi = Math.min(baseLong + step * w, g.longCap);
+      if (phase === 'taper') longMi = Math.max(3, longMi * 0.6);
+      else if (w % 4 === 3 && w > 0) longMi = Math.max(3, longMi * 0.7); // cutback dip
+      longMi = Math.round(longMi * 2) / 2;
+
+      const sessions = [];
+      const weekStart = addDays(start, w * 7);
+      const wsDow = new Date(weekStart + 'T12:00:00').getDay();
+      const delta = (profile.longDay - wsDow + 7) % 7;
+      const longDate = addDays(weekStart, delta);
+
+      for (const o of offsets) {
+        const dateISO = addDays(longDate, o.off);
+        if (dateISO < start && w === 0) continue; // do not schedule in the past
+        const dow = (profile.longDay + o.off) % 7;
+
+        if (phase === 'race') {
+          if (dateISO > profile.raceDateISO) continue; // nothing after the race
+          if (dateISO === profile.raceDateISO) continue; // race inserted below
+        }
+
+        if (o.kind === 'quality') {
+          const s = phase === 'race' || phase === 'taper'
+            ? { title: '4 x 400m sharp', distMi: 4, zone: 'interval',
+                desc: '1 mi warm-up, 4 x 400m at interval pace (' + fmtPace(z.interval) + '/mi) with 400m jogs, 1 mi cool-down. Short and sharp - touch speed, leave fresh.' }
+            : intervalSession(profile.goal, phase, w, z);
+          sessions.push({ date: dateISO, dow, type: 'interval', status: 'pending', ...s });
+        } else if (o.kind === 'tempo') {
+          const s = phase === 'race' || phase === 'taper'
+            ? { title: '15 min steady', distMi: 3.5, zone: 'threshold',
+                desc: '1 mi warm-up, 15 min steady at threshold (' + fmtPace(z.threshold) + '/mi), 1 mi cool-down. Keep the rhythm, not the fatigue.' }
+            : tempoSession(profile.goal, phase, w, z);
+          sessions.push({ date: dateISO, dow, type: 'tempo', status: 'pending', ...s });
+        } else if (o.kind === 'long') {
+          if (phase === 'race') continue; // race replaces the long run
+          sessions.push({ date: dateISO, dow, type: 'long', status: 'pending', ...longSession(longMi, profile.goal, z, w) });
+        } else {
+          sessions.push({ date: dateISO, dow, type: 'easy', status: 'pending', _easy: true, distMi: 0 });
+        }
+      }
+
+      if (phase === 'race') {
+        // Shakeout the day before if nothing is scheduled then.
+        const shakeDate = addDays(profile.raceDateISO, -1);
+        if (!sessions.some(s => s.date === shakeDate)) {
+          sessions.push({
+            date: shakeDate, dow: new Date(shakeDate + 'T12:00:00').getDay(),
+            type: 'easy', title: 'Shakeout run', distMi: 2, zone: 'easy', status: 'pending',
+            desc: '2 mi very easy (' + fmtPaceRange(z.easy.lo, z.easy.hi) + '/mi). Just loosen the legs. Then lay out your kit and rest.',
+          });
+        }
+        const rd = new Date(profile.raceDateISO + 'T12:00:00').getDay();
+        sessions.push({
+          date: profile.raceDateISO, dow: rd, type: 'race', title: g.label + ' race day',
+          distMi: Math.round(g.raceMi * 100) / 100, zone: 'race', status: 'pending',
+          desc: 'Race day. Predicted finish ' + fmtClock(predictRaceTime(profile.vdot, g.raceMi * MI)) + '. First mile conservative; nothing new on race day - same breakfast, same shoes.',
+        });
+      }
+
+      // Distribute remaining volume across easy sessions.
+      const easyIdx = sessions.map((s, i) => s._easy ? i : -1).filter(i => i >= 0);
+      const nonEasy = sessions.reduce((a, s) => a + (s._easy ? 0 : s.distMi), 0);
+      const perEasy = easyIdx.length ? Math.max(2, (vol - nonEasy) / easyIdx.length) : 0;
+      easyIdx.forEach((si, k) => {
+        const s = easySession(perEasy, z, w, k);
+        sessions[si] = { date: sessions[si].date, dow: sessions[si].dow, type: 'easy', status: 'pending', ...s };
+      });
+
+      sessions.sort((a, b) => a.date < b.date ? -1 : 1);
+      weeks.push({
+        num: w + 1,
+        phase,
+        phaseLabel: PHASES[phase],
+        targetMi: Math.round(sessions.reduce((a, s) => a + s.distMi, 0) * 10) / 10,
+        sessions,
+      });
+    }
+
+    return {
+      version: 1,
+      createdAt: new Date().toISOString(),
+      profile,
+      goalLabel: g.label,
+      weeks,
+      adaptLog: [],
+    };
+  }
+
+  /* ---------- Adaptation ---------- */
+
+  // Mark past pending sessions missed; match logged runs to planned sessions.
+  function syncPlan(plan, runs) {
+    const today = todayISO();
+    const pending = [];
+    for (const wk of plan.weeks) {
+      for (const s of wk.sessions) {
+        if (s.status === 'pending') {
+          if (s.date < today) s.status = 'missed';
+          else pending.push(s);
+        }
+      }
+    }
+    // Match unmatched runs to pending sessions (same day first, then +-1 day, distance closest).
+    for (const run of runs) {
+      if (run.matchedSessionId) continue;
+      let best = null, bestScore = Infinity;
+      for (const wk of plan.weeks) {
+        for (const s of wk.sessions) {
+          if (s.status !== 'pending') continue;
+          const dd = Math.abs(daysBetween(s.date, run.date));
+          if (dd > 1) continue;
+          const score = dd * 100 + Math.abs((s.distMi || 0) - run.distMi);
+          if (score < bestScore) { bestScore = score; best = s; }
+        }
+      }
+      if (best) {
+        best.status = 'done';
+        best.runId = run.id;
+        run.matchedSessionId = best.date + '|' + best.type;
+      }
+    }
+    return plan;
+  }
+
+  function weekCompliance(wk) {
+    let done = 0, missed = 0;
+    for (const s of wk.sessions) {
+      if (s.status === 'done') done++;
+      else if (s.status === 'missed') missed++;
+    }
+    if (done + missed === 0) return null; // week still open
+    return { done, missed, ratio: done / (done + missed) };
+  }
+
+  // Adjust future weeks once per completed week. Returns array of notes (may be empty).
+  function adaptPlan(plan) {
+    const notes = [];
+    const g = GOALS[plan.profile.goal] || GOALS.fitness;
+    for (const wk of plan.weeks) {
+      const c = weekCompliance(wk);
+      if (c === null) continue;
+      if (plan.adaptLog.some(a => a.week === wk.num)) continue;
+      let factor = 1, reason = null;
+      if (c.ratio <= 0.5 && c.missed >= 2) {
+        factor = 0.93;
+        reason = 'Week ' + wk.num + ' had ' + c.missed + ' missed runs - future volume eased 7% to keep the plan honest, not heroic.';
+      } else if (c.ratio === 1 && c.done >= plan.profile.daysPerWeek - 0) {
+        factor = 1.05;
+        reason = 'Perfect week ' + wk.num + ' - volume nudged up 5%. You earned it.';
+      }
+      if (factor !== 1) {
+        for (const fw of plan.weeks) {
+          if (fw.num <= wk.num) continue;
+          for (const s of fw.sessions) {
+            if (s.status !== 'pending' || s.type === 'race') continue;
+            let d = s.distMi * factor;
+            if (s.type === 'long') d = Math.min(d, g.longCap);
+            s.distMi = Math.round(d * 2) / 2;
+          }
+          fw.targetMi = Math.round(fw.sessions.reduce((a, s) => a + s.distMi, 0) * 10) / 10;
+        }
+        plan.adaptLog.push({ week: wk.num, factor, reason, at: new Date().toISOString() });
+        notes.push(reason);
+      } else {
+        plan.adaptLog.push({ week: wk.num, factor: 1, reason: null, at: new Date().toISOString() });
+      }
+    }
+    return notes;
+  }
+
+  // Re-pace all pending sessions after a fitness update (new VDOT).
+  function repacePending(plan, newVdot) {
+    plan.profile.vdot = newVdot;
+    const z = paceZones(newVdot);
+    for (const wk of plan.weeks) {
+      for (const s of wk.sessions) {
+        if (s.status !== 'pending') continue;
+        // Rebuild the description for this session type with fresh paces.
+        if (s.type === 'interval') Object.assign(s, intervalSession(plan.profile.goal, wk.phase, wk.num - 1, z));
+        else if (s.type === 'tempo') Object.assign(s, tempoSession(plan.profile.goal, wk.phase, wk.num - 1, z));
+        else if (s.type === 'easy') Object.assign(s, easySession(s.distMi, z, wk.num - 1, 0));
+        else if (s.type === 'long') Object.assign(s, longSession(s.distMi, plan.profile.goal, z, wk.num - 1));
+        else if (s.type === 'race') s.desc = 'Race day. Goal pace ' + fmtPace(z.marathon) + '/mi. Nothing new on race day.';
+      }
+    }
+    return plan;
+  }
+
+  function nextSession(plan) {
+    const today = todayISO();
+    let best = null;
+    for (const wk of plan.weeks) {
+      for (const s of wk.sessions) {
+        if (s.status === 'pending' && s.date >= today) {
+          if (!best || s.date < best.date) best = s;
+        }
+      }
+    }
+    return best;
+  }
+
+  function todaySession(plan) {
+    const today = todayISO();
+    for (const wk of plan.weeks) {
+      for (const s of wk.sessions) {
+        if (s.date === today) return s;
+      }
+    }
+    return null;
+  }
+
+  function currentWeek(plan) {
+    const today = todayISO();
+    for (const wk of plan.weeks) {
+      const dates = wk.sessions.map(s => s.date).sort();
+      if (!dates.length) continue;
+      if (dates[0] <= today && addDays(dates[dates.length - 1], 1) >= today) return wk;
+      if (dates[0] > today) return wk; // upcoming week
+    }
+    return plan.weeks[plan.weeks.length - 1];
+  }
+
+
+  /* ---- gamification: XP, levels, achievements (pure, DOM-free) ---- */
+  function xpForRun(run) {
+    return Math.round((run.distMi || 0) * 10);
+  }
+  function totalXP(runs) { return runs.reduce((s, r) => s + xpForRun(r), 0); }
+  function levelFromXP(xp) {
+    let lvl = 1, need = 150, acc = 0;
+    while (xp >= acc + need) { acc += need; lvl++; need = 150 * lvl; }
+    return { level: lvl, into: xp - acc, need };
+  }
+  function maxStreak(runs) {
+    const days = [...new Set(runs.map(r => r.date))].sort();
+    let best = 0, cur = 0, prev = null;
+    for (const d of days) {
+      cur = (prev && addDays(prev, 1) === d) ? cur + 1 : 1;
+      if (cur > best) best = cur;
+      prev = d;
+    }
+    return best;
+  }
+  function bestMileSec(runs) {
+    let best = null;
+    for (const r of runs) for (const sp of (r.splits || [])) {
+      if (!best || sp.sec < best) best = sp.sec;
+    }
+    return best;
+  }
+  function weeklyMilesMax(runs) {
+    const byWeek = {};
+    for (const r of runs) {
+      // ISO week key: monday of that week
+      const d = new Date(r.date + 'T12:00:00');
+      const mon = addDays(r.date, -((d.getDay() + 6) % 7));
+      byWeek[mon] = (byWeek[mon] || 0) + (r.distMi || 0);
+    }
+    return Math.max(0, ...Object.values(byWeek));
+  }
+  function perfectWeekDone(plan) {
+    return plan.weeks.some(wk => {
+      const scored = wk.sessions.filter(s => s.status === 'done' || s.status === 'missed');
+      return scored.length >= 3 && scored.every(s => s.status === 'done');
+    });
+  }
+  const BADGES = [
+    { id: 'first',    name: 'First Mile',     desc: 'Complete your first run',        icon: 'run',
+      test: s => s.runs.length >= 1 },
+    { id: 'fifty',    name: 'Fifty',          desc: '50 lifetime miles',              icon: 'ring',
+      test: s => s.runs.reduce((a, r) => a + r.distMi, 0) >= 50 },
+    { id: 'hundred',  name: 'Three Digits',   desc: '100 lifetime miles',             icon: 'ring',
+      test: s => s.runs.reduce((a, r) => a + r.distMi, 0) >= 100 },
+    { id: 'fivehun',  name: 'Five Hundred',   desc: '500 lifetime miles',             icon: 'ring',
+      test: s => s.runs.reduce((a, r) => a + r.distMi, 0) >= 500 },
+    { id: 'trot',     name: 'Four on the Trot', desc: 'Run 4 days in a row',          icon: 'flame',
+      test: s => maxStreak(s.runs) >= 4 },
+    { id: 'perfect',  name: 'Perfect Week',   desc: 'Complete every session in a plan week', icon: 'check',
+      test: s => perfectWeekDone(s.plan) },
+    { id: 'habit',    name: 'Monthly Habit',  desc: 'Run 20 days out of 30',          icon: 'chart',
+      test: s => {
+        const days = [...new Set(s.runs.map(r => r.date))].sort();
+        for (let i = 0; i < days.length; i++) {
+          let n = 0;
+          for (const d of days) if (d >= days[i] && daysBetween(days[i], d) < 30) n++;
+          if (n >= 20) return true;
+        }
+        return false;
+      } },
+    { id: 'light',    name: 'First Light',    desc: 'Finish a run before 6:30 AM',    icon: 'sun',
+      test: s => s.runs.some(r => { const f = new Date(r.ts + (r.durationSec || 0) * 1000); return f.getHours() < 6 || (f.getHours() === 6 && f.getMinutes() < 30); }) },
+    { id: 'night',    name: 'Night Shift',    desc: 'Finish a run after 9 PM',        icon: 'moon',
+      test: s => s.runs.some(r => { const f = new Date(r.ts + (r.durationSec || 0) * 1000); return f.getHours() >= 21; }) },
+    { id: 'trust',    name: 'Trust the Plan', desc: 'Complete 4 plan weeks in a row', icon: 'flag',
+      test: s => {
+        let streak = 0;
+        const today = todayISO();
+        for (const wk of s.plan.weeks) {
+          const dates = wk.sessions.map(x => x.date).sort();
+          if (!dates.length || dates[dates.length - 1] >= today) break; // only finished weeks
+          const scored = wk.sessions.filter(x => x.status === 'done' || x.status === 'missed');
+          const ok = scored.length >= 3 && scored.filter(x => x.status === 'done').length / scored.length >= 0.75;
+          streak = ok ? streak + 1 : 0;
+          if (streak >= 4) return true;
+        }
+        return false;
+      } },
+    { id: 'fastmile', name: 'Fastest Mile',   desc: 'Set a new mile PR',              icon: 'bolt',
+      pr: 'mileSec' },
+    { id: 'longday',  name: 'Longest Day',    desc: 'Set a new distance PR',          icon: 'mountain',
+      pr: 'longestMi' },
+    { id: 'standard', name: 'New Standard',   desc: 'Set a new 5K PR',                icon: 'flag',
+      pr: 'fiveKSec' },
+  ];
+  function unlockedBadges(state) {
+    const prSet = new Set(state.badgesPr || []);
+    return BADGES.filter(b => {
+      if (b.pr) return prSet.has(b.id);
+      try { return b.test(state); } catch (e) { return false; }
+    }).map(b => b.id);
+  }
+
+  return {
+    GOALS, DAY_NAMES, PHASES, MI,
+    xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
+    vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
+    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance,
+    nextSession, todaySession, currentWeek,
+    fmtPace, fmtPaceRange, fmtClock, fmtMi, addDays, todayISO, daysBetween,
+  };
+})();
+if (typeof module !== 'undefined') module.exports = Engine;
