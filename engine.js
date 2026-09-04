@@ -371,20 +371,75 @@ const VOICE = {
     };
   }
 
+  /* ---------- Why this workout ---------- */
+  const WHY = {
+    easy: "Keep this truly easy - today's softness is what lets the hard days actually be hard.",
+    tempo: 'This is where you learn to sit with sustained discomfort, finding the edge you can hold without tipping over.',
+    interval: 'Short, sharp efforts raise your ceiling - they expand what your body believes is possible.',
+    long: 'This builds the engine - time on feet grows the aerobic base everything else stands on.',
+    rest: 'Adaptation happens here, not on the road. Let your body absorb the work you have done.',
+    race: 'This is the day all the work was for. Trust the training, start controlled, finish proud.',
+  };
+  function whySession(type) { return WHY[type] || WHY.easy; }
+
   /* ---------- Adaptation ---------- */
+
+
+  // Day-after response to freshly missed sessions: absorb easy, swap quality
+  // into an easy today, slide a missed long run onto a rest day trimmed.
+  // Two misses in a row -> ask the one question. Never guilt.
+  function respondToMisses(plan, newlyMissed, today) {
+    const yesterday = addDays(today, -1);
+    const fresh = newlyMissed.filter(s => s.date === yesterday);
+    if (!fresh.length) return;
+    const all = plan.weeks.flatMap(w => w.sessions);
+    const todaySess = all.find(x => x.date === today && x.status === 'pending');
+    const dayBefore = all.find(x => x.date === addDays(today, -2));
+    const streak = !!(dayBefore && dayBefore.status === 'missed');
+    const wk = currentWeek(plan);
+    let note = null;
+    const s = fresh[0];
+    if (streak) {
+      note = 'Two missed days in a row. Life busy, or body tired? Tell me below - either answer is fine, it just changes what I do next.';
+    } else if (s.type === 'easy') {
+      note = "Yesterday's run didn't happen - that's fine. One missed run changes nothing. Today's plan stands.";
+    } else if (s.type === 'long') {
+      if (!todaySess) {
+        wk.sessions.push({ id: s.id + '-slid', dow: new Date(today + 'T12:00:00').getDay(), date: today, type: 'long', status: 'pending',
+          title: s.title + ' (slid a day)', distMi: Math.round((s.distMi || 6) * 0.85 * 2) / 2,
+          desc: 'Slid from yesterday, trimmed a touch. Then straight back to the schedule.',
+          adjusted: { from: 'Rest day', fromType: 'rest', action: 'slide', at: new Date().toISOString() } });
+        wk.sessions.sort((a, b) => a.date < b.date ? -1 : 1);
+        note = "Long run slides to today, trimmed a little. No catching up, no doubling - just today's run.";
+      } else {
+        note = "Missed the long run - we don't double up to catch up. The week absorbs it; the next long run stays as planned.";
+      }
+    } else {
+      if (todaySess && todaySess.type === 'easy') {
+        todaySess.type = s.type; todaySess.title = s.title; todaySess.distMi = s.distMi; todaySess.desc = s.desc;
+        todaySess.adjusted = { from: 'Easy run', fromType: 'easy', action: 'swap', at: new Date().toISOString() };
+        note = "Yesterday's quality session moves to today and the easy run disappears. Hard days never stack - this is the one move we make.";
+      } else {
+        note = "Yesterday's quality session is dropped, not made up. Stacking hard days is how runners break - the week stays honest.";
+      }
+    }
+    if (note) plan.adaptLog.push({ week: wk.num, factor: 1, reason: note, at: new Date().toISOString() });
+  }
 
   // Mark past pending sessions missed; match logged runs to planned sessions.
   function syncPlan(plan, runs) {
     const today = todayISO();
     const pending = [];
+    const newlyMissed = [];
     for (const wk of plan.weeks) {
       for (const s of wk.sessions) {
         if (s.status === 'pending') {
-          if (s.date < today) s.status = 'missed';
+          if (s.date < today) { s.status = 'missed'; newlyMissed.push(s); }
           else pending.push(s);
         }
       }
     }
+    respondToMisses(plan, newlyMissed, today);
     // Match unmatched runs to pending sessions (same day first, then +-1 day, distance closest).
     for (const run of runs) {
       if (run.matchedSessionId) continue;
@@ -697,7 +752,7 @@ const VOICE = {
   }
 
   return {
-    GOALS, DAY_NAMES, PHASES, MI, VOICE, parseFeel, applyFeel,
+    GOALS, DAY_NAMES, PHASES, MI, VOICE, parseFeel, applyFeel, whySession,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
     generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance,
