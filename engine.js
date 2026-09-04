@@ -641,7 +641,7 @@ const VOICE = {
   /* Mutates today's pending session on the plan per the feel. Returns { action, note } or null. */
   function applyFeel(plan, feel, dateISO) {
     if (!plan || !plan.weeks) return null;
-    const wk = plan.weeks.find(w => w.sessions.some(s => s.date === dateISO));
+    const wk = currentWeek(plan);
     if (!wk) return null;
     const sess = wk.sessions.find(s => s.date === dateISO);
     const quality = sess && (sess.type === 'interval' || sess.type === 'tempo' || sess.type === 'long' || sess.type === 'race');
