@@ -156,7 +156,7 @@ function coachSay(html, next) {
 }
 
 function obBegin() {
-  if (typeof AI !== 'undefined') AI.warmup();
+  if (!navigator.onLine && typeof AI !== 'undefined') AI.warmup();
   ob.chatStep = 'wait';
   ob.chat = [];
   renderChat();
