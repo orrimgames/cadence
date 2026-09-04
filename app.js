@@ -475,6 +475,8 @@ function renderToday() {
         <h3>${esc(sess.title)}</h3>
         <div class="big">${Engine.fmtMi(sess.distMi)}<span> ${Engine.unitSuffix()}</span></div>
         <p>${esc(sess.desc)}</p>
+        <button class="whybtn" onclick="this.nextElementSibling.classList.toggle('open')">Why this workout</button>
+        <div class="whytxt">${esc(Engine.whySession(sess.type))}</div>
         <div class="btnrow">
           <button class="cta" onclick="startPlannedRun()">Start this run</button>
           <button class="ghost" onclick="openManual()">Log manually</button>
@@ -494,6 +496,8 @@ function renderToday() {
         <div class="tag"><i class="tdot" style="background:#3A4552"></i>rest</div>
         <h3>Rest day</h3>
         <p>Recovery is where the adaptation happens.${next ? ' Next: <b>' + esc(next.title) + '</b> · ' + prettyDate(next.date) + '.' : ''}</p>
+        <button class="whybtn" onclick="this.nextElementSibling.classList.toggle('open')">Why rest</button>
+        <div class="whytxt">${esc(Engine.whySession('rest'))}</div>
         <div class="btnrow">
           <button class="ghost" onclick="go('run')">Log an extra run</button>
         </div>
@@ -585,7 +589,7 @@ function weekCard(w, open) {
         ${w.sessions.map(s => `
           <div class="sessrow ${s.status} ${s.date === today ? 'today' : ''}">
             <div class="sday"><b>${Engine.DAY_NAMES[s.dow]}</b><span>${shortDate(s.date)}</span></div>
-            <div class="sinfo"><b>${esc(s.title)}</b><span>${typeTag(s.type)} · ${Engine.fmtMi(s.distMi)} ${Engine.unitSuffix()}</span></div>
+            <div class="sinfo"><b>${esc(s.title)}</b><span>${typeTag(s.type)} · ${Engine.fmtMi(s.distMi)} ${Engine.unitSuffix()}</span><button class="whybtn sm" onclick="this.nextElementSibling.classList.toggle('open')">Why</button><div class="whytxt">${esc(Engine.whySession(s.type))}</div></div>
             <div class="sstatus">${s.status === 'done' ? '✓' : s.status === 'missed' ? '×' : s.date === today ? '•' : ''}</div>
           </div>`).join('')}
       </div>
