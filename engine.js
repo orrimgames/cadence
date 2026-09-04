@@ -612,8 +612,92 @@ const VOICE = {
     }).map(b => b.id);
   }
 
+
+  /* ---------- Feel check-in: free text -> structured feel -> plan adjustment ----------
+     Daniel's rules, from VOICE: feel first; never guilt; general soreness = easy is fine;
+     pain in ONE spot = brakes; sick = rest; mileage bumps happen weekly, never on a hero day. */
+  function parseFeel(raw) {
+    const t = ' ' + String(raw || '').toLowerCase().replace(/[^a-z\s\-']/g, ' ') + ' ';
+    const has = function() { for (let i = 0; i < arguments.length; i++) { if (t.includes(' ' + arguments[i]) || t.includes(' ' + arguments[i] + 's ') || t.includes(' ' + arguments[i] + 'd ') || t.includes(' ' + arguments[i] + 'ing ')) return true; } return false; };
+    const spots = ['shin', 'knee', 'ankle', 'heel', 'calf', 'hamstring', 'quad', 'hip', 'achilles', 'back', 'foot', 'feet', 'toe', 'groin', 'plantar'];
+    const painish = has('hurt', 'pain', 'sore', 'ache', 'twinge', 'sharp', 'tender', 'throbb', 'stabb', 'pull', 'strain', 'niggle', 'bugg', 'tight');
+    let spot = null;
+    for (const s of spots) { if (t.includes(' ' + s)) { spot = s; break; } }
+    const f = {
+      raw: String(raw || '').slice(0, 280),
+      sick: has('sick', 'fever', 'flu', 'covid', 'nausea', 'migraine', 'headache', 'cold', 'stomach bug', 'food poison'),
+      localizedPain: !!(spot && painish),
+      spot,
+      tired: has('tired', 'exhaust', 'drain', 'sleepy', 'fatigue', 'dead', 'beat', 'worn out', 'burnt', 'burnout', 'sluggish', 'no energy', 'low energy', 'didnt sleep', "didn't sleep", 'no sleep'),
+      sore: false,
+      stressed: has('stress', 'anxious', 'anxiety', 'overwhelm', 'swamp', 'crazy busy'),
+      great: has('great', 'amazing', 'awesome', 'fantastic', 'strong', 'fresh', 'energiz', 'pumped', 'rested', 'ready', 'good', 'solid', 'prime'),
+    };
+    f.sore = !f.localizedPain && !f.sick && has('sore', 'stiff', 'tight', 'ache', 'achy', 'heavy legs', 'doms');
+    f.anything = f.sick || f.localizedPain || f.tired || f.sore || f.stressed || f.great;
+    return f;
+  }
+
+  /* Mutates today's pending session on the plan per the feel. Returns { action, note } or null. */
+  function applyFeel(plan, feel, dateISO) {
+    if (!plan || !plan.weeks) return null;
+    const wk = plan.weeks.find(w => w.sessions.some(s => s.date === dateISO));
+    if (!wk) return null;
+    const sess = wk.sessions.find(s => s.date === dateISO);
+    const quality = sess && (sess.type === 'interval' || sess.type === 'tempo' || sess.type === 'long' || sess.type === 'race');
+    let action = 'keep', note = null;
+
+    if (feel.sick) {
+      action = 'rest';
+      note = "Rest today - you're sick. Health first, always. The plan absorbs this; there is no catching up to do.";
+    } else if (feel.localizedPain) {
+      action = 'rest';
+      note = 'Pain in one spot (' + feel.spot + ') means brakes - today is off. Running through localized pain is how small problems become big ones. Tell me how it feels tomorrow.';
+    } else if (feel.tired && quality) {
+      action = 'downgrade';
+      note = 'Quality day shelved - you get an easy one instead. Fitness is built by showing up, not by hero days on empty.';
+    } else if (feel.tired) {
+      action = 'shorten';
+      note = 'Cut it short today. A tired easy run still counts - jog it gentle and stop early.';
+    } else if (feel.sore && quality) {
+      action = 'downgrade';
+      note = 'All-over soreness is fine to move through, but not fast. Easy miles today; the quality session moves.';
+    } else if (feel.sore) {
+      action = 'keep';
+      note = 'Sore is fine to run on - but keep today honestly easy. Walk breaks if you need them.';
+    } else if (feel.stressed && quality) {
+      action = 'downgrade';
+      note = 'Stress is load too. Easy run today - move to clear the head, no paces to hit.';
+    } else if (feel.great) {
+      action = 'keep';
+      note = 'Love hearing that. Plan stays as written - consistency beats hero days. Feeling great two, three weeks straight is when we bump things.';
+    } else if (!sess) {
+      action = 'note';
+      note = 'Logged. Rest days are part of the plan - recovery is where the adaptation happens.';
+    }
+
+    if (sess && sess.status === 'pending' && (action === 'rest' || action === 'downgrade' || action === 'shorten')) {
+      sess.adjusted = { from: sess.title, fromType: sess.type, action, feel: feel.raw, at: new Date().toISOString() };
+      if (action === 'rest') {
+        sess.type = 'easy'; sess._rest = true; sess.title = 'Rest - coach call'; sess.distMi = 0;
+        sess.desc = feel.sick ? 'Sick day. Full rest.' : 'Localized pain (' + (feel.spot || 'one spot') + ') - full rest, no running through it.';
+      } else if (action === 'downgrade') {
+        sess.type = 'easy'; sess._easy = true;
+        sess.title = 'Easy run (quality shelved)';
+        sess.distMi = Math.max(1.5, Math.round((sess.distMi || 3) * 0.6 * 2) / 2);
+        sess.desc = 'Swapped down by feel. Slow, conversational, walk breaks welcome.';
+      } else if (action === 'shorten') {
+        sess.title = sess.title + ' (shortened)';
+        sess.distMi = Math.max(1, Math.round((sess.distMi || 2) * 0.7 * 2) / 2);
+        sess.desc = (sess.desc || '') + ' Shortened by feel - stop here.';
+      }
+    }
+    if (note) plan.adaptLog.push({ week: wk.num, factor: 1, reason: note, at: new Date().toISOString(), feel: feel.raw.slice(0, 120) });
+    return note ? { action, note, session: sess || null } : null;
+  }
+
   return {
-    GOALS, DAY_NAMES, PHASES, MI, VOICE,
+    GOALS, DAY_NAMES, PHASES, MI, VOICE, parseFeel, applyFeel,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
     generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance,
