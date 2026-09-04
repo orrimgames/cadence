@@ -173,7 +173,7 @@ header { margin-bottom: 20px; }
 }
 .ghost:active { transform: scale(0.965); }
 .ghost.wide { width: 100%; margin-top: 10px; }
-.ghost.danger { color: var(--red); border-color: rgba(255, 90, 122, 0.28); }
+.ghost.danger { color: rgba(255,255,255,.6); border-color: rgba(255,255,255,.22); }
 .btnrow { display: flex; gap: 10px; }
 .btnrow .cta { flex: 1.4; }
 .btnrow .ghost { flex: 1; }
@@ -678,3 +678,9 @@ header { margin-bottom: 20px; }
 /* feel check-in (Today view) */
 .feelcard { display: flex; gap: 8px; margin: 0 0 14px; }
 .feelcard .cinput { flex: 1; }
+
+/* why-this-workout expandable */
+.whybtn { background: none; border: none; color: rgba(255,255,255,.42); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; padding: 8px 0 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.whybtn.sm { padding-top: 5px; font-size: 10px; }
+.whytxt { display: none; font-size: 13px; line-height: 1.55; color: rgba(255,255,255,.62); padding: 6px 0 2px; }
+.whytxt.open { display: block; }
