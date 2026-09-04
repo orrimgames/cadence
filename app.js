@@ -511,6 +511,7 @@ function renderToday() {
         <div class="coachlabel">COACH</div>
         <p>${esc(coachNote())}</p>
       </div>
+      <div class="feelcard"><input id="feelInput" class="cinput" type="text" placeholder="How's the body today? Tell me anything." autocomplete="off" onkeydown="if(event.key==='Enter')feelSend()"><button class="csend" onclick="feelSend()" aria-label="Send">&#8593;</button></div>
       <div class="weekstrip">${strip.join('')}</div>
       ${sessHtml}
       <div class="statrow">
@@ -523,6 +524,20 @@ function renderToday() {
         <div class="stat"><b>W${wk.num}</b><span>${wk.phaseLabel} phase</span></div>
       </div>
     </div>`;
+}
+
+function feelSend() {
+  const el = $('#feelInput');
+  const t = (el.value || '').trim();
+  if (!t) { el.focus(); return; }
+  const feel = Engine.parseFeel(t);
+  const res = Engine.applyFeel(S.plan, feel, Engine.todayISO());
+  if (!res) {
+    S.plan.adaptLog.push({ week: Engine.currentWeek(S.plan).num, factor: 1, reason: 'Heard you - logged. The plan stays as written today.', at: new Date().toISOString(), feel: t.slice(0, 120) });
+  }
+  save();
+  render();
+  if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
 }
 
 function mondayOf(iso) {
