@@ -681,6 +681,6 @@ header { margin-bottom: 20px; }
 
 /* why-this-workout expandable */
 .whybtn { background: none; border: none; color: rgba(255,255,255,.42); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; padding: 8px 0 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-.whybtn.sm { padding-top: 5px; font-size: 10px; }
+.whybtn.sm { padding: 0 0 0 8px; margin-left: 6px; font-size: 10px; }
 .whytxt { display: none; font-size: 13px; line-height: 1.55; color: rgba(255,255,255,.62); padding: 6px 0 2px; }
 .whytxt.open { display: block; }
