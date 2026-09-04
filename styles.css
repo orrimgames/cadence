@@ -674,3 +674,7 @@ header { margin-bottom: 20px; }
 .opinion:first-of-type { border-top: none; }
 .opinion b { display: block; font-size: 14px; font-weight: 750; letter-spacing: -0.01em; margin-bottom: 3px; }
 .opinion span { display: block; font-size: 13.5px; color: var(--dim); line-height: 1.5; }
+
+/* feel check-in (Today view) */
+.feelcard { display: flex; gap: 8px; margin: 0 0 14px; }
+.feelcard .cinput { flex: 1; }
