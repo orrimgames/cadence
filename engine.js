@@ -472,37 +472,67 @@ const VOICE = {
     return { done, missed, ratio: done / (done + missed) };
   }
 
-  // Adjust future weeks once per completed week. Returns array of notes (may be empty).
+  // Weekly progression (K3 rule): bump +8% after 3 consecutive perfect weeks,
+  // capped at 150% of week-1 volume and +10% over the best completed week.
+  // Every 4th week is a cutback (streak-neutral). Any missed run resets the streak.
+  // A pending long run never exceeds 40% of weekly volume.
   function adaptPlan(plan) {
     const notes = [];
-    const g = GOALS[plan.profile.goal] || GOALS.fitness;
+    const wk1 = plan.weeks[0];
+    const capBase = wk1 ? wk1.targetMi * 1.5 : Infinity;
+    let streak = 0;
+    const scaleWeek = (fw, factor, cap) => {
+      const target = Math.min(fw.targetMi * factor, cap);
+      const f2 = fw.targetMi > 0 ? target / fw.targetMi : 1;
+      for (const s of fw.sessions) {
+        if (s.status !== 'pending' || s.type === 'race') continue;
+        s.distMi = Math.round(s.distMi * f2 * 10) / 10;
+      }
+      const lr = fw.sessions.find(s => s.type === 'long' && s.status === 'pending');
+      const tot = fw.sessions.reduce((a, s) => a + s.distMi, 0);
+      if (lr && lr.distMi > tot * 0.4) lr.distMi = Math.round(tot * 0.4 * 2) / 2;
+      fw.targetMi = Math.round(fw.sessions.reduce((a, s) => a + s.distMi, 0) * 10) / 10;
+    };
     for (const wk of plan.weeks) {
       const c = weekCompliance(wk);
       if (c === null) continue;
-      if (plan.adaptLog.some(a => a.week === wk.num)) continue;
-      let factor = 1, reason = null;
-      if (c.ratio <= 0.5 && c.missed >= 2) {
-        factor = 0.93;
-        reason = 'Week ' + wk.num + ' had ' + c.missed + ' missed runs - future volume eased 7% to keep the plan honest, not heroic.';
-      } else if (c.ratio === 1 && c.done >= plan.profile.daysPerWeek - 0) {
-        factor = 1.05;
-        reason = 'Perfect week ' + wk.num + ' - volume nudged up 5%. You earned it.';
+      if (wk.num % 4 === 0) {
+        if (!plan.adaptLog.some(a => a.week === wk.num))
+          plan.adaptLog.push({ week: wk.num, factor: 1, reason: null, at: new Date().toISOString() });
+        continue; // cutback week: streak untouched
       }
-      if (factor !== 1) {
-        for (const fw of plan.weeks) {
-          if (fw.num <= wk.num) continue;
-          for (const s of fw.sessions) {
-            if (s.status !== 'pending' || s.type === 'race') continue;
-            let d = s.distMi * factor;
-            if (s.type === 'long') d = Math.min(d, g.longCap);
-            s.distMi = Math.round(d * 2) / 2;
-          }
-          fw.targetMi = Math.round(fw.sessions.reduce((a, s) => a + s.distMi, 0) * 10) / 10;
+      if (c.ratio === 1) {
+        streak++;
+        if (plan.adaptLog.some(a => a.week === wk.num)) continue;
+        if (streak >= 3) {
+          const closed = plan.weeks.filter(w => weekCompliance(w) !== null);
+          const maxDone = Math.max(...closed.map(w => w.targetMi));
+          const cap = Math.min(capBase, maxDone * 1.1);
+          for (const fw of plan.weeks) if (fw.num > wk.num) scaleWeek(fw, 1.08, cap);
+          const reason = 'Three perfect weeks in a row - volume steps up 8%. You earned it.';
+          plan.adaptLog.push({ week: wk.num, factor: 1.08, reason, at: new Date().toISOString() });
+          notes.push(reason);
+        } else if (streak === 2) {
+          const reason = 'Two clean weeks in a row - one more and the plan steps you up.';
+          plan.adaptLog.push({ week: wk.num, factor: 1, reason, at: new Date().toISOString() });
+          notes.push(reason);
+        } else {
+          plan.adaptLog.push({ week: wk.num, factor: 1, reason: null, at: new Date().toISOString() });
+        }
+      } else {
+        const hadStreak = streak;
+        streak = 0;
+        if (plan.adaptLog.some(a => a.week === wk.num)) continue;
+        let factor = 1, reason = null;
+        if (c.ratio <= 0.5 && c.missed >= 2) {
+          for (const fw of plan.weeks) if (fw.num > wk.num) scaleWeek(fw, 0.93, Infinity);
+          factor = 0.93;
+          reason = 'Week ' + wk.num + ' had ' + c.missed + ' missed runs - future volume eased 7% to keep the plan honest, not heroic.';
+        } else if (hadStreak >= 2) {
+          reason = 'Streak resets here - one miss is no problem, we just start the count again.';
         }
         plan.adaptLog.push({ week: wk.num, factor, reason, at: new Date().toISOString() });
-        notes.push(reason);
-      } else {
-        plan.adaptLog.push({ week: wk.num, factor: 1, reason: null, at: new Date().toISOString() });
+        if (reason) notes.push(reason);
       }
     }
     return notes;
@@ -745,6 +775,18 @@ const VOICE = {
         sess.title = sess.title + ' (shortened)';
         sess.distMi = Math.max(1, Math.round((sess.distMi || 2) * 0.7 * 2) / 2);
         sess.desc = (sess.desc || '') + ' Shortened by feel - stop here.';
+      }
+    }
+    if (feel.localizedPain) {
+      const nw = plan.weeks.find(w => w.num === wk.num + 1);
+      if (nw && !nw._painTrimmed) {
+        nw._painTrimmed = true;
+        for (const s of nw.sessions) {
+          if (s.status !== 'pending' || s.type === 'race') continue;
+          s.distMi = Math.round(s.distMi * 0.7 * 10) / 10;
+        }
+        nw.targetMi = Math.round(nw.sessions.reduce((a, s) => a + s.distMi, 0) * 10) / 10;
+        note = note + ' Next week eases off 30% while it settles.';
       }
     }
     if (note) plan.adaptLog.push({ week: wk.num, factor: 1, reason: note, at: new Date().toISOString(), feel: feel.raw.slice(0, 120) });
