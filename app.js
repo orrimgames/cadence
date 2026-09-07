@@ -539,9 +539,9 @@ function polishNote(entry) {
   AI.cloudChat([
     { role: 'system', content: 'You are Cadence, a running coach. Rewrite the coach note in your voice: calm, direct, warm but no fluff, never guilt. Keep every fact, number and instruction identical. Under 45 words. Return only the rewritten note, no quotes, no preamble.' },
     { role: 'user', content: entry.reason },
-  ], 90, true).then(text => {
+  ], 90, true, 'moonshotai/kimi-k3').then(text => {
     if (!text) return;
-    const clean = text.replace(/^["']+|["']+$/g, '').trim();
+    const clean = text.replace(/^["']+|["']+$/g, '').replace(/\u2014/g, '-').trim();
     if (/\b(we need|i should|let me|the user|original note|the note)\b/i.test(clean)) return; // reasoning leak guard
     if (clean.length < 12 || clean.length > 320 || clean === entry.reason) return;
     entry.reason = clean;
