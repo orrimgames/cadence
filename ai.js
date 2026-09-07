@@ -24,7 +24,7 @@ const AI = (() => {
   function emit() { listeners.forEach(f => { try { f(status()); } catch (e) {} }); }
 
   /* ---- tier 1: cloud (Nemotron via Supabase edge function) ---- */
-  async function cloudChat(messages, maxNew) {
+  async function cloudChat(messages, maxNew, oneLine) {
     if (!navigator.onLine) return null;
     try {
       const ctrl = new AbortController();
@@ -38,7 +38,12 @@ const AI = (() => {
       clearTimeout(to);
       if (!r.ok) { stats.cloud = 'http_' + r.status; warmup(); return null; }
       const d = await r.json();
-      const text = d && typeof d.text === 'string' ? d.text.trim() : '';
+      let text = d && typeof d.text === 'string' ? d.text.trim() : '';
+      if (text && oneLine) {
+        // Nemotron sometimes leaks reasoning before the answer; the answer is the last line.
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        text = lines[lines.length - 1] || '';
+      }
       if (!text) { stats.cloud = 'empty'; return null; }
       stats.cloud = 'ok';
       return text;
