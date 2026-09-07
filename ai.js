@@ -24,7 +24,7 @@ const AI = (() => {
   function emit() { listeners.forEach(f => { try { f(status()); } catch (e) {} }); }
 
   /* ---- tier 1: cloud (Nemotron via Supabase edge function) ---- */
-  async function cloudChat(messages, maxNew, oneLine) {
+  async function cloudChat(messages, maxNew, oneLine, model) {
     if (!navigator.onLine) return null;
     try {
       const ctrl = new AbortController();
@@ -32,7 +32,7 @@ const AI = (() => {
       const r = await fetch(CLOUD_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: CLOUD_KEY, Authorization: 'Bearer ' + CLOUD_KEY },
-        body: JSON.stringify({ messages, max_tokens: Math.max(maxNew || 64, 24) }),
+        body: JSON.stringify({ messages, max_tokens: Math.max(maxNew || 64, 24), ...(model ? { model } : {}) }),
         signal: ctrl.signal,
       });
       clearTimeout(to);
