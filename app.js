@@ -393,6 +393,7 @@ function render() {
   if (!S) { startOnboarding(); return; }
   Engine.syncPlan(S.plan, S.runs);
   const notes = Engine.adaptPlan(S.plan);
+  polishNote(S.plan.adaptLog.filter(x => x.reason && !x._polished).slice(-1)[0]);
   save();
   if (notes.length && view === 'today') setTimeout(() => toast(notes[notes.length - 1]), 600);
   $('#view').className = '';
@@ -530,6 +531,25 @@ function renderToday() {
     </div>`;
 }
 
+// Nemotron voice polish: rephrase the latest deterministic coach note via the
+// relay, in place, once per note. The template stays if the cloud is unreachable.
+function polishNote(entry) {
+  if (!entry || !entry.reason || entry._polished) return;
+  entry._polished = true; // in-memory guard against double-firing this session
+  AI.cloudChat([
+    { role: 'system', content: 'You are Cadence, a running coach. Rewrite the coach note in your voice: calm, direct, warm but no fluff, never guilt. Keep every fact, number and instruction identical. Under 45 words. Return only the rewritten note, no quotes, no preamble.' },
+    { role: 'user', content: entry.reason },
+  ], 90).then(text => {
+    if (!text) return;
+    const clean = text.replace(/^["']+|["']+$/g, '').trim();
+    if (clean.length < 12 || clean.length > 320 || clean === entry.reason) return;
+    entry.reason = clean;
+    save(true);
+    render();
+    if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
+  });
+}
+
 function feelSend() {
   const el = $('#feelInput');
   const t = (el.value || '').trim();
@@ -542,6 +562,7 @@ function feelSend() {
   save();
   render();
   if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
+  polishNote(S.plan.adaptLog.filter(x => x.reason).slice(-1)[0]);
 }
 
 function mondayOf(iso) {
