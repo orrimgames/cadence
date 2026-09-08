@@ -371,6 +371,13 @@ const VOICE = {
     };
   }
 
+  /* ---------- Shoes ---------- */
+  // Miles logged on a pair since its start date. Most shoes die at 300-500.
+  function shoeMiles(runs, sinceISO) {
+    if (!sinceISO) return 0;
+    return Math.round(runs.filter(r => r.date >= sinceISO).reduce((a, r) => a + (r.distMi || 0), 0) * 10) / 10;
+  }
+
   /* ---------- Why this workout ---------- */
   const WHY = {
     easy: "Keep this truly easy - today's softness is what lets the hard days actually be hard.",
@@ -794,7 +801,7 @@ const VOICE = {
   }
 
   return {
-    GOALS, DAY_NAMES, PHASES, MI, VOICE, parseFeel, applyFeel, whySession,
+    GOALS, DAY_NAMES, PHASES, MI, VOICE, parseFeel, applyFeel, whySession, shoeMiles,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
     generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance,
