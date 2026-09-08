@@ -393,6 +393,7 @@ function render() {
   if (!S) { startOnboarding(); return; }
   Engine.syncPlan(S.plan, S.runs);
   const notes = Engine.adaptPlan(S.plan);
+  checkShoe();
   polishNote(S.plan.adaptLog.filter(x => x.reason && !x._polished).slice(-1)[0]);
   save();
   if (notes.length && view === 'today') setTimeout(() => toast(notes[notes.length - 1]), 600);
@@ -1133,6 +1134,16 @@ function renderYou() {
         <div class="prrow"><span>Threshold</span><b>${Engine.fmtPace(z.threshold)}/${Engine.unitSuffix()}</b></div>
         <div class="prrow"><span>Interval</span><b>${Engine.fmtPace(z.interval)}/${Engine.unitSuffix()}</b></div>
       </div>
+      <div class="card"><h4>My shoes</h4>
+        ${S.shoe ? `
+          <div class="prrow"><span>${esc(S.shoe.name)}</span><b>${Engine.shoeMiles(S.runs, S.shoe.sinceISO)} ${Engine.unitSuffix()}</b></div>
+          <div class="lvbar shoebar"><i style="width:${Math.min(Engine.shoeMiles(S.runs, S.shoe.sinceISO) / 400 * 100, 100)}%"></i></div>
+          <p class="hint">${Engine.shoeMiles(S.runs, S.shoe.sinceISO) >= 400 ? 'Past 400 - time to retire these. Fresh foam is cheaper than an injury.' : Engine.shoeMiles(S.runs, S.shoe.sinceISO) >= 300 ? 'Into the wear zone. If your legs start feeling flat, it is the shoes.' : 'Miles on this pair. Most shoes are done somewhere between 300 and 500.'}</p>
+          <button class="ghost wide" onclick="retireShoe()">New pair</button>` : `
+          <p class="hint">Track the miles on your current pair. Most shoes are done somewhere between 300 and 500.</p>
+          <input id="shoeName" class="dateinput" placeholder="e.g. Pegasus 41" autocomplete="off">
+          <button class="cta" style="margin-top:10px" onclick="addShoe()">Start tracking</button>`}
+      </div>
       <div class="card"><h4>Fitness moved?</h4>
         <p class="hint">Ran a race or time trial? Update your fitness and every pending workout re-paces itself.</p>
         <div class="steppers">${stepperYou('upMin', 4, 20, 'min')}${stepperYou('upSec', 0, 59, 'sec')}<div class="unit">/ ${p.units === 'km' ? 'km' : 'mile'} comfortable</div></div>
@@ -1190,6 +1201,32 @@ function updateFitness() {
   save();
   toast('Plan re-paced to your new fitness');
   renderYou();
+}
+function addShoe() {
+  const el = $('#shoeName');
+  const name = (el.value || '').trim();
+  if (!name) { el.focus(); return; }
+  S.shoe = { name: name.slice(0, 40), sinceISO: Engine.todayISO() };
+  save();
+  if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
+  toast('Tracking miles on your ' + name);
+  renderYou();
+}
+function retireShoe() {
+  S.shoe = null;
+  save();
+  if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
+  renderYou();
+}
+// One-time coach note when the current pair crosses 400.
+function checkShoe() {
+  if (!S || !S.shoe || S.shoe.alerted400) return;
+  const mi = Engine.shoeMiles(S.runs, S.shoe.sinceISO);
+  if (mi < 400) return;
+  S.shoe.alerted400 = true;
+  S.plan.adaptLog.push({ week: Engine.currentWeek(S.plan).num, factor: 1, reason: 'Your ' + S.shoe.name + ' just passed 400 miles. That is retirement territory - fresh foam is cheaper than an injury.', at: new Date().toISOString() });
+  save();
+  if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
 }
 function exportData() {
   const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
