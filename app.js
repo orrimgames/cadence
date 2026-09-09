@@ -580,8 +580,8 @@ async function askSend() {
   const ans = await AI.cloudChat([
     { role: 'system', content: sys },
     { role: 'user', content: t },
-  ], 220, false, 'moonshotai/kimi-k3');
-  entry.a = (ans && ans.replace(/\u2014/g, '-').trim()) || 'Coach is offline right now - your plan is safe on this device. Ask again when you have signal.';
+  ], 220, false);
+  entry.a = (ans && ans.replace(/[\u2011\u2013\u2014]/g, '-').trim()) || 'Coach is offline right now - your plan is safe on this device. Ask again when you have signal.';
   save(true);
   render();
   if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
