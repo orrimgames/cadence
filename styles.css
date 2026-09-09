@@ -687,3 +687,8 @@ header { margin-bottom: 20px; }
 
 /* shoe tracking */
 .shoebar { margin-top: 8px; }
+
+/* ask your coach */
+.asklog { margin: 14px 0 10px; }
+.askq { font-size: 11px; letter-spacing: .08em; color: rgba(255,255,255,.42); margin: 12px 0 4px; text-transform: uppercase; }
+.aska { font-size: 14px; line-height: 1.55; color: rgba(255,255,255,.88); }
