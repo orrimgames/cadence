@@ -477,6 +477,7 @@ function renderToday() {
         <h3>${esc(sess.title)}</h3>
         <div class="big">${Engine.fmtMi(sess.distMi)}<span> ${Engine.unitSuffix()}</span></div>
         <p>${esc(sess.desc)}</p>
+        ${sess.type === 'easy' && S.profile.hasWatch ? '<p class="hint">Heart rate check: stay under ~140 bpm. If it climbs, back off.</p>' : ''}
         <button class="whybtn" onclick="this.nextElementSibling.classList.toggle('open')">Why this workout</button>
         <div class="whytxt">${esc(Engine.whySession(sess.type))}</div>
         <div class="btnrow">
@@ -529,6 +530,10 @@ function renderToday() {
         <div class="stat"><b>${streak}</b><span>active weeks</span></div>
         <div class="stat"><b>W${wk.num}</b><span>${wk.phaseLabel} phase</span></div>
       </div>
+      ${(S.coachChat && S.coachChat.length) ? `<div class="asklog">${S.coachChat.slice(-2).map(c => `
+        <div class="askq">YOU · ${esc(c.q)}</div>
+        <div class="aska">${c.a ? esc(c.a) : 'Thinking...'}</div>`).join('')}</div>` : ''}
+      <div class="feelcard"><input id="askInput" class="cinput" type="text" placeholder="Ask your coach anything..." autocomplete="off" onkeydown="if(event.key==='Enter')askSend()"><button class="csend" onclick="askSend()" aria-label="Ask">&#8593;</button></div>
     </div>`;
 }
 
@@ -552,6 +557,41 @@ function polishNote(entry) {
   });
 }
 
+async function askSend() {
+  const el = $('#askInput');
+  const t = (el.value || '').trim();
+  if (!t) { el.focus(); return; }
+  if (!S.coachChat) S.coachChat = [];
+  const entry = { q: t.slice(0, 300), a: null, at: new Date().toISOString() };
+  S.coachChat.push(entry);
+  S.coachChat = S.coachChat.slice(-6);
+  save(true);
+  render();
+  const wk = Engine.currentWeek(S.plan);
+  const p = S.profile;
+  const g = Engine.GOALS[p.goal];
+  const ctx = [
+    'Runner: ' + (p.name || 'the runner') + ', goal: ' + g.label + (p.raceDateISO ? ' on ' + p.raceDateISO : '') + ', experience: ' + (p.experience || 'unknown') + '.',
+    'Week ' + wk.num + ' (' + wk.phaseLabel + ' phase), target ' + wk.targetMi + ' ' + Engine.unitSuffix() + '. Sessions: ' + wk.sessions.map(s => s.date.slice(5) + ' ' + s.title + ' ' + s.distMi + Engine.unitSuffix() + ' ' + s.status).join('; ') + '.',
+    'Recent coach notes: ' + (S.plan.adaptLog.filter(x => x.reason).slice(-2).map(x => x.reason).join(' | ') || 'none') + '.',
+    p.injuryNotes ? 'Watch-outs: ' + p.injuryNotes + '.' : '',
+  ].join(' ');
+  const sys = 'You are Cadence, a world-class running coach speaking to your runner one-to-one. Voice: calm, direct, warm, no fluff, never guilt. Easy days easy so hard days can be hard; pain in one spot means stop. Answer concretely using the context. Under 90 words. Plain text, no markdown, no emdashes. Context: ' + ctx;
+  const ans = await AI.cloudChat([
+    { role: 'system', content: sys },
+    { role: 'user', content: t },
+  ], 220, false, 'moonshotai/kimi-k3');
+  entry.a = (ans && ans.replace(/\u2014/g, '-').trim()) || 'Coach is offline right now - your plan is safe on this device. Ask again when you have signal.';
+  save(true);
+  render();
+  if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
+}
+function setWatch(v) {
+  S.profile.hasWatch = v;
+  save();
+  if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
+  renderYou();
+}
 function feelSend() {
   const el = $('#feelInput');
   const t = (el.value || '').trim();
@@ -1125,6 +1165,7 @@ function renderYou() {
         <div class="prrow"><span>Schedule</span><b>${p.daysPerWeek} days / wk · long run ${Engine.DAY_NAMES[p.longDay]}</b></div>
         ${p.experience ? `<div class="prrow"><span>Experience</span><b>${{ new: 'New to running', returning: 'Getting back', seasoned: 'Seasoned' }[p.experience]}</b></div>` : ''}
         <div class="prrow"><span>Units</span><b class="segmini"><button class="${(p.units || 'mi') === 'mi' ? 'on' : ''}" onclick="setUnitsPref('mi')">mi</button><button class="${p.units === 'km' ? 'on' : ''}" onclick="setUnitsPref('km')">km</button></b></div>
+        <div class="prrow"><span>HR watch</span><b class="segmini"><button class="${p.hasWatch ? 'on' : ''}" onclick="setWatch(true)">yes</button><button class="${!p.hasWatch ? 'on' : ''}" onclick="setWatch(false)">no</button></b></div>
         ${p.injuryNotes ? `<div class="prrow"><span>Watching</span><b>${esc(p.injuryNotes)}</b></div>` : ''}
         ${p.strengths ? `<div class="prrow"><span>Strengths</span><b>${esc(p.strengths)}</b></div>` : ''}
       </div>
