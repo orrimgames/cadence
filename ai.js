@@ -28,7 +28,7 @@ const AI = (() => {
     if (!navigator.onLine) return null;
     try {
       const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), 9000);
+      const to = setTimeout(() => ctrl.abort(), 16000);
       const r = await fetch(CLOUD_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: CLOUD_KEY, Authorization: 'Bearer ' + CLOUD_KEY },
