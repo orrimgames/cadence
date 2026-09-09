@@ -557,6 +557,18 @@ function polishNote(entry) {
   });
 }
 
+function cleanAsk(ans) {
+  if (!ans) return null;
+  let t = ans.trim();
+  // Nemotron sometimes thinks out loud first; the answer is the final paragraph.
+  const paras = t.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  if (paras.length > 1) t = paras[paras.length - 1];
+  t = t.replace(/^["']+|["']+$/g, '').replace(/[\u2011\u2013\u2014]/g, '-').trim();
+  if (/\b(the user|we need|let me|let's|i should|i'll|draft:|word count)\b/i.test(t)) return null;
+  if (t.length < 8) return null;
+  return t;
+}
+
 async function askSend() {
   const el = $('#askInput');
   const t = (el.value || '').trim();
@@ -580,8 +592,8 @@ async function askSend() {
   const ans = await AI.cloudChat([
     { role: 'system', content: sys },
     { role: 'user', content: t },
-  ], 220, false);
-  entry.a = (ans && ans.replace(/[\u2011\u2013\u2014]/g, '-').trim()) || 'Coach is offline right now - your plan is safe on this device. Ask again when you have signal.';
+  ], 600, false);
+  entry.a = cleanAsk(ans) || 'Coach is offline right now - your plan is safe on this device. Ask again when you have signal.';
   save(true);
   render();
   if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
