@@ -3,7 +3,7 @@
 // the next open; cross-origin (tiles, CDN libs) stays cache-first with
 // fetch-and-cache fallback. skipWaiting + clients.claim activate instantly,
 // and app.js reloads open clients on controllerchange.
-const CACHE = 'cadence-v24';
+const CACHE = 'cadence-v25';
 const SHELL = [
   './',
   './index.html',
