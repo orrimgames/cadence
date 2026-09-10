@@ -692,3 +692,7 @@ header { margin-bottom: 20px; }
 .asklog { margin: 14px 0 10px; }
 .askq { font-size: 11px; letter-spacing: .08em; color: rgba(255,255,255,.42); margin: 12px 0 4px; text-transform: uppercase; }
 .aska { font-size: 14px; line-height: 1.55; color: rgba(255,255,255,.88); }
+
+.chiprow { display:flex; gap:8px; margin-top:12px; }
+.chipbtn { flex:1; padding:10px 12px; border-radius:999px; border:1px solid var(--line); background:none; color:inherit; font:600 13px/1 inherit; letter-spacing:.01em; }
+.chipbtn:active { transform: scale(.97); border-color: var(--volt); color: var(--volt); }
