@@ -430,7 +430,40 @@ const VOICE = {
         note = "Yesterday's quality session is dropped, not made up. Stacking hard days is how runners break - the week stays honest.";
       }
     }
-    if (note) plan.adaptLog.push({ week: wk.num, factor: 1, reason: note, at: new Date().toISOString() });
+    if (note) plan.adaptLog.push({ week: wk.num, factor: 1, reason: note, at: new Date().toISOString(), ...(streak ? { ask: 'busy-tired' } : {}) });
+  }
+
+  // Runner answered the two-miss question. Busy: trim the extras, keep the key
+  // sessions. Tired: intensity on hold, easy only for a few days. No guilt either way.
+  function applyMissChoice(plan, choice, today) {
+    const entry = plan.adaptLog.filter(a => a.ask === 'busy-tired' && !a.choice).slice(-1)[0];
+    if (!entry) return null;
+    entry.choice = choice;
+    const wk = currentWeek(plan);
+    const pending = wk.sessions.filter(s => s.status === 'pending' && s.date >= today);
+    let note;
+    if (choice === 'busy') {
+      let trimmed = 0;
+      for (const s of pending) {
+        if (s.type === 'easy' && s.distMi > 3) { s.distMi = Math.round(s.distMi * 0.75 * 2) / 2; s.adjusted = { action: 'trim', at: new Date().toISOString() }; trimmed++; }
+      }
+      wk.targetMi = Math.round(wk.sessions.reduce((a, s) => a + s.distMi, 0) * 10) / 10;
+      note = trimmed
+        ? 'Busy week it is. I trimmed the easy runs and kept the sessions that matter - the week still counts.'
+        : 'Busy week it is. The key sessions stay, nothing stacks. Do what fits and call it a win.';
+    } else {
+      const q = pending.find(s => s.type === 'interval' || s.type === 'tempo');
+      if (q) {
+        q.type = 'easy'; q.title = 'Easy run'; q.desc = 'Quality on hold until the body is back. Keep it genuinely easy.';
+        q.adjusted = { action: 'downgrade', at: new Date().toISOString() };
+      }
+      const lng = pending.find(s => s.type === 'long');
+      if (lng) { lng.distMi = Math.round(lng.distMi * 0.9 * 2) / 2; lng.adjusted = { action: 'trim', at: new Date().toISOString() }; }
+      wk.targetMi = Math.round(wk.sessions.reduce((a, s) => a + s.distMi, 0) * 10) / 10;
+      note = 'Heard. Intensity is on hold - easy running only for a few days. That is the fix, not a step back.';
+    }
+    plan.adaptLog.push({ week: wk.num, factor: 1, reason: note, at: new Date().toISOString() });
+    return note;
   }
 
   // Mark past pending sessions missed; match logged runs to planned sessions.
@@ -804,7 +837,7 @@ const VOICE = {
     GOALS, DAY_NAMES, PHASES, MI, VOICE, parseFeel, applyFeel, whySession, shoeMiles,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
-    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance,
+    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice,
     setUnits, unitSuffix, distTxt,
     nextSession, todaySession, currentWeek,
     fmtPace, fmtPaceRange, fmtClock, fmtMi, addDays, todayISO, daysBetween,
