@@ -508,6 +508,8 @@ function renderToday() {
   }
 
   const streak = activeWeeks();
+  const missAsk = S.plan.adaptLog.filter(a => a.ask === 'busy-tired' && !a.choice).slice(-1)[0];
+  const missAskLive = missAsk && Engine.daysBetween(missAsk.at.slice(0, 10), Engine.todayISO()) <= 3 ? missAsk : null;
   $('#view').innerHTML = `
     <div class="page">
       <header>
@@ -517,6 +519,7 @@ function renderToday() {
       <div class="coachcard">
         <div class="coachlabel">COACH</div>
         <p>${esc(coachNote())}</p>
+        ${missAskLive ? `<div class="chiprow"><button class="chipbtn" onclick="missChoice('busy')">Life busy</button><button class="chipbtn" onclick="missChoice('tired')">Body tired</button></div>` : ''}
       </div>
       <div class="feelcard"><input id="feelInput" class="cinput" type="text" placeholder="How's the body today? Tell me anything." autocomplete="off" onkeydown="if(event.key==='Enter')feelSend()"><button class="csend" onclick="feelSend()" aria-label="Send">&#8593;</button></div>
       <div class="weekstrip">${strip.join('')}</div>
@@ -597,6 +600,14 @@ async function askSend() {
   save(true);
   render();
   if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
+}
+function missChoice(v) {
+  const note = Engine.applyMissChoice(S.plan, v, Engine.todayISO());
+  if (!note) return;
+  save(true);
+  if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
+  render();
+  toast(note);
 }
 function setWatch(v) {
   S.profile.hasWatch = v;
