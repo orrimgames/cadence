@@ -412,6 +412,21 @@ const VOICE = {
   };
   function whySession(type) { return WHY[type] || WHY.easy; }
 
+  // Weather call, straight from the treadmill opinion: outside by default -
+  // the treadmill is the smart call only at real extremes (dangerous heat,
+  // deep freeze, thunderstorms, unsafe wind). Otherwise adapt, don't hide.
+  function weatherCall(tempF, code, windMph) {
+    if (tempF == null) return null;
+    if (tempF >= 100) return { extreme: true, advice: 'Treadmill day. ' + Math.round(tempF) + ' degrees is dangerous heat - no outdoor workout is worth it. Inside, shorten the warm-up, extra water.' };
+    if (tempF <= 28) return { extreme: true, advice: 'Treadmill day. ' + Math.round(tempF) + ' degrees is past the line - take it inside and keep the effort honest.' };
+    if (code >= 95) return { extreme: true, advice: 'Treadmill day. Thunderstorms out there - the run matters, the route does not. Inside today.' };
+    if (windMph >= 40) return { extreme: true, advice: 'Treadmill day. ' + Math.round(windMph) + ' mph wind is unsafe. Inside today.' };
+    if (code >= 71 && code <= 86) return { extreme: false, advice: 'Snow out there. Fine to run if the footing is safe - slow it down, shorten the stride. Otherwise inside, no debate.' };
+    if (tempF >= 90) return { extreme: false, advice: Math.round(tempF) + ' degrees. Go early or late, slow the pace, hydrate. Heat is training stress - respect it, do not fight it.' };
+    if (tempF <= 32) return { extreme: false, advice: Math.round(tempF) + ' degrees. Dress for twenty warmer and give the warm-up a few extra minutes. Good running weather once you are moving.' };
+    return { extreme: false, advice: null };
+  }
+
   /* ---------- Adaptation ---------- */
 
 
@@ -860,7 +875,7 @@ const VOICE = {
     GOALS, DAY_NAMES, PHASES, MI, VOICE, STRENGTH, STRETCH, parseFeel, applyFeel, whySession, shoeMiles,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
-    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice,
+    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall,
     setUnits, unitSuffix, distTxt,
     nextSession, todaySession, currentWeek,
     fmtPace, fmtPaceRange, fmtClock, fmtMi, addDays, todayISO, daysBetween,
