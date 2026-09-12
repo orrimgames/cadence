@@ -480,6 +480,7 @@ function renderToday() {
         ${sess.type === 'easy' && S.profile.hasWatch ? '<p class="hint">Heart rate check: stay under ~140 bpm. If it climbs, back off.</p>' : ''}
         <button class="whybtn" onclick="this.nextElementSibling.classList.toggle('open')">Why this workout</button>
         <div class="whytxt">${esc(Engine.whySession(sess.type))}</div>
+        ${wxHtml(sess)}
         <div class="btnrow">
           <button class="cta" onclick="startPlannedRun()">Start this run</button>
           <button class="ghost" onclick="openManual()">Log manually</button>
@@ -601,6 +602,54 @@ async function askSend() {
   save(true);
   render();
   if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
+}
+function wxLabel(code) {
+  if (code === 0) return 'clear';
+  if (code <= 3) return 'partly cloudy';
+  if (code === 45 || code === 48) return 'fog';
+  if (code <= 57) return 'drizzle';
+  if (code <= 67) return 'rain';
+  if (code <= 77 || code === 85 || code === 86) return 'snow';
+  if (code <= 82) return 'showers';
+  if (code >= 95) return 'thunderstorms';
+  return 'overcast';
+}
+function wxHtml(sess) {
+  const w = S.weather;
+  const btn = `<button class="wxbtn" onclick="checkWeather()">${w ? 'Refresh conditions' : 'Check conditions'}</button>`;
+  if (!w) return `<div class="wxrow">${btn}</div>`;
+  const call = Engine.weatherCall(w.tempF, w.code, w.windMph);
+  let h = `<div class="wxrow"><span class="wxcond">${Math.round(w.tempF)}&deg;F &middot; ${wxLabel(w.code)}</span>${btn}</div>`;
+  if (call && call.advice) h += `<p class="hint">${esc(call.advice)}</p>`;
+  if (call && call.extreme && sess && sess.status === 'pending') {
+    h += `<button class="ghost wide" onclick="moveInside()">${sess.indoor ? 'Running inside (treadmill) - tap to undo' : 'Move this run inside'}</button>`;
+  }
+  if (sess && sess.indoor) h = h.replace('</span>', ' &middot; treadmill</span>');
+  return h;
+}
+async function checkWeather() {
+  if (!navigator.geolocation) { toast('No location on this device'); return; }
+  toast('Checking conditions...');
+  navigator.geolocation.getCurrentPosition(async pos => {
+    try {
+      const lat = pos.coords.latitude, lon = pos.coords.longitude;
+      const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m,weather_code,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph');
+      const d = await r.json();
+      S.weather = { lat, lon, at: new Date().toISOString(), tempF: d.current.temperature_2m, code: d.current.weather_code, windMph: d.current.wind_speed_10m };
+      save(true);
+      if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
+      render();
+    } catch (e) { toast('Could not load weather'); }
+  }, () => toast('Location off - no weather call'), { timeout: 8000 });
+}
+function moveInside() {
+  const sess = Engine.todaySession(S.plan);
+  if (!sess) return;
+  sess.indoor = !sess.indoor;
+  save(true);
+  if (typeof Sync !== 'undefined' && Sync.push) Sync.push();
+  render();
+  toast(sess.indoor ? 'Moved inside. Treadmill it is.' : 'Back outside.');
 }
 function mobHtml() {
   const today = Engine.todayISO();
