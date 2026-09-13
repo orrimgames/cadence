@@ -983,18 +983,8 @@ function decimatePts(pts, maxN) {
 function renderRunSummary(run) {
   const paceStr = Engine.fmtPace(run.avgPace);
   // Compare with planned target if matched
-  const sess = Engine.todaySession(S.plan);
-  let verdict = '';
-  if (sess && sess.status === 'pending') {
-    const target = sess.distMi;
-    const diff = run.distMi - target;
-    if (sess.type === 'easy' && run.avgPace < Engine.paceZones(S.profile.vdot).easy.lo) verdict = 'Solid - but that was quicker than easy pace. Easy days keep you healthy.';
-    else if (Math.abs(diff) <= target * 0.15) verdict = 'Nailed it. That is exactly the work the plan asked for.';
-    else if (diff < 0) verdict = 'Short of the target - logged, and the plan takes it into account.';
-    else verdict = 'More than the plan asked. Bank it - and keep tomorrow honest.';
-  } else {
-    verdict = 'Logged. Every mile counts.';
-  }
+  const verdict = Engine.runVerdict(S.plan, S.profile, run);
+  run._verdict = verdict;
   const hypo = { ...S, runs: S.runs.concat([run]), badgesPr: [...new Set([...(S.badgesPr || []), ...detectPRs(run)])] };
   const seenSet = new Set(S.badgesSeen || []);
   const freshBadges = Engine.unlockedBadges(hypo).filter(b => !seenSet.has(b));
@@ -1104,6 +1094,7 @@ function saveRun(id) {
   updatePRs(run);
   Engine.syncPlan(S.plan, S.runs);
   Engine.adaptPlan(S.plan);
+  if (run._verdict) S.plan.adaptLog.push({ week: Engine.currentWeek(S.plan).num, factor: 1, reason: run._verdict, at: new Date().toISOString() });
   S.badgesSeen = Engine.unlockedBadges(S);
   save();
   window._pendingRun = null;
