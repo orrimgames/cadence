@@ -412,6 +412,19 @@ const VOICE = {
   };
   function whySession(type) { return WHY[type] || WHY.easy; }
 
+  // Post-run verdict: the coach watched the run and says one honest thing.
+  // Compared against today's planned session when there is one.
+  function runVerdict(plan, profile, run) {
+    const sess = todaySession(plan);
+    if (!sess || sess.status !== 'pending') return 'Logged. Every mile counts.';
+    const target = sess.distMi;
+    const diff = run.distMi - target;
+    if (sess.type === 'easy' && run.avgPace < paceZones(profile.vdot).easy.lo) return 'Solid - but that was quicker than easy pace. Easy days keep you healthy.';
+    if (Math.abs(diff) <= target * 0.15) return 'Nailed it. That is exactly the work the plan asked for.';
+    if (diff < 0) return 'Short of the target - logged, and the plan takes it into account.';
+    return 'More than the plan asked. Bank it - and keep tomorrow honest.';
+  }
+
   // Weather call, straight from the treadmill opinion: outside by default -
   // the treadmill is the smart call only at real extremes (dangerous heat,
   // deep freeze, thunderstorms, unsafe wind). Otherwise adapt, don't hide.
@@ -875,7 +888,7 @@ const VOICE = {
     GOALS, DAY_NAMES, PHASES, MI, VOICE, STRENGTH, STRETCH, parseFeel, applyFeel, whySession, shoeMiles,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
-    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall,
+    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict,
     setUnits, unitSuffix, distTxt,
     nextSession, todaySession, currentWeek,
     fmtPace, fmtPaceRange, fmtClock, fmtMi, addDays, todayISO, daysBetween,
