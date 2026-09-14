@@ -509,6 +509,7 @@ function renderToday() {
   }
 
   const streak = activeWeeks();
+  const rw = Engine.raceWeek(S.plan, today);
   const missAsk = S.plan.adaptLog.filter(a => a.ask === 'busy-tired' && !a.choice).slice(-1)[0];
   const missAskLive = missAsk && Engine.daysBetween(missAsk.at.slice(0, 10), Engine.todayISO()) <= 3 ? missAsk : null;
   $('#view').innerHTML = `
@@ -522,6 +523,13 @@ function renderToday() {
         <p>${esc(coachNote())}</p>
         ${missAskLive ? `<div class="chiprow"><button class="chipbtn" onclick="missChoice('busy')">Life busy</button><button class="chipbtn" onclick="missChoice('tired')">Body tired</button></div>` : ''}
       </div>
+      ${rw ? `<div class="racecard">
+        <div class="coachlabel">RACE WEEK</div>
+        <div class="racecount">${rw.daysOut === 0 ? 'Race day' : rw.daysOut + ' day' + (rw.daysOut === 1 ? '' : 's') + ' to go'}</div>
+        <p>${esc(rw.guide)}</p>
+        <button class="whybtn" onclick="this.nextElementSibling.classList.toggle('open')">Race-morning checklist</button>
+        <div class="whytxt"><ul class="racelist">${rw.checklist.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>
+      </div>` : ''}
       <div class="feelcard"><input id="feelInput" class="cinput" type="text" placeholder="How's the body today? Tell me anything." autocomplete="off" onkeydown="if(event.key==='Enter')feelSend()"><button class="csend" onclick="feelSend()" aria-label="Send">&#8593;</button></div>
       <div class="weekstrip">${strip.join('')}</div>
       ${sessHtml}
