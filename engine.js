@@ -440,6 +440,28 @@ const VOICE = {
     return { extreme: false, advice: null };
   }
 
+  // Race week: countdown, daily guidance in coach voice, race-morning checklist.
+  const RACE_MORNING = [
+    'Bib pinned, chip laced',
+    'Watch charged',
+    'Breakfast 2-3 hours before the gun',
+    'The fast shoes',
+    'Arrive 45-60 minutes early',
+    'Sip water - nothing new on race day',
+  ];
+  function raceWeek(plan, today) {
+    const race = plan.weeks.flatMap(w => w.sessions).find(s => s.type === 'race');
+    if (!race) return null;
+    const daysOut = daysBetween(today, race.date);
+    if (daysOut < 0 || daysOut > 7) return null;
+    let guide;
+    if (daysOut === 0) guide = 'Race day. Trust the training, start controlled, finish proud. Breakfast 2-3 hours before, arrive early, warm up easy.';
+    else if (daysOut === 1) guide = 'Shakeout if it is on the card - fifteen, twenty minutes, loose. Lay out your kit tonight. Nothing new tomorrow.';
+    else if (daysOut <= 3) guide = 'Keep runs short and easy now. Sleep is training.';
+    else guide = 'The work is done. Nothing this week adds fitness - everything can spend it. Short, sharp, rested.';
+    return { race, daysOut, guide, checklist: RACE_MORNING };
+  }
+
   /* ---------- Adaptation ---------- */
 
 
@@ -888,7 +910,7 @@ const VOICE = {
     GOALS, DAY_NAMES, PHASES, MI, VOICE, STRENGTH, STRETCH, parseFeel, applyFeel, whySession, shoeMiles,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
-    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict,
+    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING,
     setUnits, unitSuffix, distTxt,
     nextSession, todaySession, currentWeek,
     fmtPace, fmtPaceRange, fmtClock, fmtMi, addDays, todayISO, daysBetween,
