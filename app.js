@@ -1117,16 +1117,16 @@ function trendsCard() {
   const W = 640, H = 150, pad = 8;
   const maxMi = Math.max(...t.map(x => x.miles), 1);
   const slot = (W - pad * 2) / t.length;
-  const barW = Math.max(3, slot - 3);
+  const barW = Math.min(28, Math.max(3, slot - 3));
   const bars = t.map((x, i) => {
     const h = Math.max(2, x.miles / maxMi * (H - 24));
-    return '<rect x="' + (pad + i * slot).toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + barW + '" height="' + h.toFixed(1) + '" rx="2" fill="rgba(255,255,255,.26)"/>';
+    return '<rect x="' + (pad + i * slot + (slot - barW) / 2).toFixed(1) + '" y="' + (H - h).toFixed(1) + '" width="' + barW + '" height="' + h.toFixed(1) + '" rx="2" fill="rgba(255,255,255,.26)"/>';
   }).join('');
   const pz = t.filter(x => x.paceSec);
   let line = '', drift = '';
   if (pz.length > 1) {
     const pMin = Math.min(...pz.map(x => x.paceSec)), pMax = Math.max(...pz.map(x => x.paceSec));
-    const pts = t.map((x, i) => x.paceSec ? [pad + i * slot + barW / 2, H - ((pMax - x.paceSec) / Math.max(1, pMax - pMin)) * (H - 40) - 12] : null).filter(Boolean);
+    const pts = t.map((x, i) => x.paceSec ? [pad + i * slot + slot / 2, H - ((pMax - x.paceSec) / Math.max(1, pMax - pMin)) * (H - 40) - 12] : null).filter(Boolean);
     line = '<polyline points="' + pts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' ') + '" fill="none" stroke="#fff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
     const dSec = pz[0].paceSec - pz[pz.length - 1].paceSec;
     if (Math.abs(dSec) >= 5) {
