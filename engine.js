@@ -440,6 +440,22 @@ const VOICE = {
     return { extreme: false, advice: null };
   }
 
+  // Long-view trends: weekly mileage and distance-weighted average pace.
+  function weeklyTrends(runs) {
+    const wk = {};
+    for (const r of runs) {
+      const d = new Date(r.date + 'T12:00:00');
+      const dow = (d.getDay() + 6) % 7;
+      d.setDate(d.getDate() - dow);
+      const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      if (!wk[k]) wk[k] = { week: k, miles: 0, secMi: 0 };
+      wk[k].miles += r.distMi;
+      wk[k].secMi += r.avgPace * r.distMi;
+    }
+    return Object.values(wk).sort((a, b) => a.week < b.week ? -1 : 1)
+      .map(w => ({ week: w.week, miles: Math.round(w.miles * 10) / 10, paceSec: w.miles ? Math.round(w.secMi / w.miles) : null }));
+  }
+
   // Race week: countdown, daily guidance in coach voice, race-morning checklist.
   const RACE_MORNING = [
     'Bib pinned, chip laced',
@@ -910,7 +926,7 @@ const VOICE = {
     GOALS, DAY_NAMES, PHASES, MI, VOICE, STRENGTH, STRETCH, parseFeel, applyFeel, whySession, shoeMiles,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
-    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING,
+    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING, weeklyTrends,
     setUnits, unitSuffix, distTxt,
     nextSession, todaySession, currentWeek,
     fmtPace, fmtPaceRange, fmtClock, fmtMi, addDays, todayISO, daysBetween,
