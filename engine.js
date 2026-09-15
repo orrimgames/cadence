@@ -448,12 +448,12 @@ const VOICE = {
       const dow = (d.getDay() + 6) % 7;
       d.setDate(d.getDate() - dow);
       const k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      if (!wk[k]) wk[k] = { week: k, miles: 0, secMi: 0 };
+      if (!wk[k]) wk[k] = { week: k, miles: 0, secMi: 0, paceMi: 0 };
       wk[k].miles += r.distMi;
-      wk[k].secMi += r.avgPace * r.distMi;
+      if (Number.isFinite(r.avgPace)) { wk[k].secMi += r.avgPace * r.distMi; wk[k].paceMi += r.distMi; }
     }
     return Object.values(wk).sort((a, b) => a.week < b.week ? -1 : 1)
-      .map(w => ({ week: w.week, miles: Math.round(w.miles * 10) / 10, paceSec: w.miles ? Math.round(w.secMi / w.miles) : null }));
+      .map(w => ({ week: w.week, miles: Math.round(w.miles * 10) / 10, paceSec: w.paceMi ? Math.round(w.secMi / w.paceMi) : null }));
   }
 
   // Race week: countdown, daily guidance in coach voice, race-morning checklist.
