@@ -16,7 +16,7 @@
   --volt-soft: rgba(255, 255, 255, 0.08);
   --cyan: #C9CDD4;
   --orange: #8A9099;
-  --red: #FF5A7A;
+  --red: #A9AFB8;
   --radius: 22px;
   --radius-sm: 15px;
   --shadow: 0 10px 34px rgba(0, 0, 0, 0.42);
@@ -307,7 +307,7 @@ header { margin-bottom: 20px; }
 .rbtn:active { transform: scale(0.96); }
 .rbtn.pause { background: var(--card2); border: 1px solid var(--line); }
 .rbtn.resume { background: var(--volt); color: var(--volt-ink); }
-.rbtn.finish { background: linear-gradient(180deg, #FF7C96, var(--red)); color: #fff; flex: 1.2; box-shadow: 0 8px 26px rgba(255, 90, 122, 0.28); }
+.rbtn.finish { background: var(--volt); color: var(--volt-ink); flex: 1.2; box-shadow: 0 8px 26px rgba(255, 255, 255, 0.16); }
 
 .sumhero { margin-bottom: 10px; }
 .routecanvas {
@@ -484,7 +484,7 @@ header { margin-bottom: 20px; }
 
 #toast {
   position: fixed; left: 50%; bottom: calc(var(--sab) + 100px); transform: translate(-50%, 20px);
-  background: #E9F4CF; color: #141A08;
+  background: #FAFAFA; color: #0A0B0D;
   font-size: 14px; font-weight: 700;
   padding: 12px 19px; border-radius: 30px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
