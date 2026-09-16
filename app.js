@@ -809,9 +809,29 @@ function startRun() {
   T.pts = []; T.distMi = 0; T.elapsed = 0;
   T.startTs = Date.now(); T.pauseTotal = 0;
   T.splits = []; T.lastSplitAt = 0;
+  T.targetMi = T.target && T.target.distMi ? Math.round(T.target.distMi) : null;
   T.gpsState = 'searching';
   T.watchId = navigator.geolocation.watchPosition(onPos, onPosErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
   T.tickId = setInterval(tick, 500);
+  renderRunActive();
+  speak('Run started.');
+}
+
+function cuesOn() { return S.cues !== false; }
+function speak(text) {
+  if (!cuesOn()) return;
+  try {
+    if (!('speechSynthesis' in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.05;
+    speechSynthesis.speak(u);
+  } catch (e) { /* no audio - silent run */ }
+}
+function toggleCues() {
+  S.cues = !cuesOn();
+  if (!S.cues && 'speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch (e) {} }
+  save();
   renderRunActive();
 }
 
@@ -835,9 +855,12 @@ function onPos(p) {
   // mile splits
   const nextSplit = T.splits.length + 1;
   if (T.distMi >= nextSplit) {
-    T.splits.push({ mi: nextSplit, sec: T.elapsed - T.lastSplitAt });
+    const sp = { mi: nextSplit, sec: T.elapsed - T.lastSplitAt };
+    T.splits.push(sp);
     T.lastSplitAt = T.elapsed;
     if (navigator.vibrate) navigator.vibrate([80, 60, 80]);
+    const cue = Engine.splitCue(sp.mi, sp.sec, T.targetMi);
+    if (cue) speak(cue);
   }
   updateRunMap();
 }
@@ -922,7 +945,10 @@ function currentPace() {
 function renderRunActive() {
   $('#view').innerHTML = `
     <div class="page runactive">
-      <div class="gpsrow"><i id="gpsdot" class="${T.gpsState}"></i><span id="gpslabel">${{ searching: 'Finding GPS…', ok: 'GPS locked', weak: 'GPS weak', denied: 'GPS blocked - check location permission' }[T.gpsState]}</span>${T.target ? `<span class="runtarget">${esc(T.target.title)}</span>` : ''}</div>
+      <div class="gpsrow"><i id="gpsdot" class="${T.gpsState}"></i><span id="gpslabel">${{ searching: 'Finding GPS…', ok: 'GPS locked', weak: 'GPS weak', denied: 'GPS blocked - check location permission' }[T.gpsState]}</span>${T.target ? `<span class="runtarget">${esc(T.target.title)}</span>` : ''}
+        <button class="cuebtn" onclick="toggleCues()" aria-label="Voice cues" title="Voice cues">${cuesOn()
+          ? '<svg viewBox="0 0 24 24" width="17" height="17"><path d="M3 9v6h4l5 5V4L7 9H3z" fill="#fff"/><path d="M15.5 9.5a3.5 3.5 0 010 5M18 7a7 7 0 010 10" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>'
+          : '<svg viewBox="0 0 24 24" width="17" height="17"><path d="M3 9v6h4l5 5V4L7 9H3z" fill="#666"/><path d="M16 9.5l5 5M21 9.5l-5 5" stroke="#666" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg>'}</button></div>
       <div class="rundist"><b id="rd">0.00</b><span>mi</span></div>
       <div id="runmap" class="runmap" style="display:none"></div>
       <div class="rungrid">
@@ -959,6 +985,7 @@ function pauseRun() { T.paused = true; T.pauseStart = Date.now(); renderRunActiv
 function resumeRun() { T.paused = false; T.pauseTotal += Date.now() - T.pauseStart; renderRunActive(); }
 
 function finishRun() {
+  if ('speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch (e) {} }
   clearInterval(T.tickId);
   destroyRunMap();
   if (T.watchId != null) navigator.geolocation.clearWatch(T.watchId);
