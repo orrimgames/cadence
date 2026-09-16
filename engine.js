@@ -440,6 +440,19 @@ const VOICE = {
     return { extreme: false, advice: null };
   }
 
+  // Audio cue text for a completed mile split. Speakable words, no colons.
+  function splitCue(mi, splitSec, targetMi) {
+    if (!Number.isFinite(splitSec) || splitSec <= 0) return null;
+    const m = Math.floor(splitSec / 60), s = Math.round(splitSec % 60);
+    const pace = (m ? m + (m === 1 ? ' minute' : ' minutes') : '')
+      + (m && s ? ' ' : '')
+      + (s || !m ? s + (s === 1 ? ' second' : ' seconds') : '');
+    let cue = 'Mile ' + mi + '. ' + pace + '.';
+    if (targetMi && targetMi >= 3 && mi === Math.floor(targetMi / 2)) cue += ' Halfway there.';
+    if (targetMi && targetMi >= 2 && mi === Math.round(targetMi) - 1) cue += ' One more mile.';
+    return cue;
+  }
+
   // Long-view trends: weekly mileage and distance-weighted average pace.
   function weeklyTrends(runs) {
     const wk = {};
@@ -926,7 +939,7 @@ const VOICE = {
     GOALS, DAY_NAMES, PHASES, MI, VOICE, STRENGTH, STRETCH, parseFeel, applyFeel, whySession, shoeMiles,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
-    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING, weeklyTrends,
+    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING, weeklyTrends, splitCue,
     setUnits, unitSuffix, distTxt,
     nextSession, todaySession, currentWeek,
     fmtPace, fmtPaceRange, fmtClock, fmtMi, addDays, todayISO, daysBetween,
