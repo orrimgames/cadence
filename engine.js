@@ -440,6 +440,40 @@ const VOICE = {
     return { extreme: false, advice: null };
   }
 
+  // Route memory: two runs share a route when they start near each other
+  // and most of the shorter trace hugs the longer one.
+  function sameRoute(aPts, bPts) {
+    if (!aPts || !bPts || aPts.length < 5 || bPts.length < 5) return false;
+    const M = 111320; // meters per degree latitude
+    const lat0 = aPts[0].lat;
+    const cos = Math.cos(lat0 * Math.PI / 180);
+    const toXY = p => [p.lon * M * cos, p.lat * M];
+    const ax = aPts.map(toXY), bx = bPts.map(toXY);
+    if (Math.hypot(ax[0][0] - bx[0][0], ax[0][1] - bx[0][1]) > 300) return false;
+    const short = ax.length <= bx.length ? ax : bx;
+    const long = ax.length <= bx.length ? bx : ax;
+    const sStep = Math.max(1, Math.floor(short.length / 40));
+    const lStep = Math.max(1, Math.floor(long.length / 120));
+    let near = 0, n = 0;
+    for (let i = 0; i < short.length; i += sStep) {
+      n++;
+      let best = Infinity;
+      for (let j = 0; j < long.length; j += lStep) {
+        const d = Math.hypot(short[i][0] - long[j][0], short[i][1] - long[j][1]);
+        if (d < best) best = d;
+      }
+      if (best <= 150) near++;
+    }
+    return near / n >= 0.6;
+  }
+
+  // Prior runs that share this run's route, oldest first.
+  function routeTwins(runs, run) {
+    if (!run || !run.pts || run.pts.length < 5) return [];
+    return runs.filter(r => r.id !== run.id && r.pts && sameRoute(r.pts, run.pts))
+      .sort((a, b) => a.date < b.date ? -1 : 1);
+  }
+
   // Audio cue text for a completed mile split. Speakable words, no colons.
   function splitCue(mi, splitSec, targetMi) {
     if (!Number.isFinite(splitSec) || splitSec <= 0) return null;
@@ -939,7 +973,7 @@ const VOICE = {
     GOALS, DAY_NAMES, PHASES, MI, VOICE, STRENGTH, STRETCH, parseFeel, applyFeel, whySession, shoeMiles,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
-    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING, weeklyTrends, splitCue,
+    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING, weeklyTrends, splitCue, sameRoute, routeTwins,
     setUnits, unitSuffix, distTxt,
     nextSession, todaySession, currentWeek,
     fmtPace, fmtPaceRange, fmtClock, fmtMi, addDays, todayISO, daysBetween,
