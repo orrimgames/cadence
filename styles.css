@@ -725,3 +725,5 @@ header { margin-bottom: 20px; }
 
 .cuebtn { background: none; border: 1px solid var(--line); border-radius: 999px; width: 34px; height: 34px; display: grid; place-items: center; margin-left: auto; padding: 0; cursor: pointer; }
 .gpsrow { display: flex; align-items: center; gap: 8px; }
+
+.twinline { font-size: 14.5px; line-height: 1.55; color: var(--text); }
