@@ -1042,6 +1042,7 @@ function renderRunSummary(run) {
       <div id="summap" class="summap"></div>
       <canvas id="routecanvas" class="routecanvas" width="640" height="360" style="display:none"></canvas>
       ${run.splits.length ? `<div class="card"><h4>Splits</h4>${run.splits.map(s => `<div class="splitrow"><span>Split ${s.mi}</span><b>${Engine.fmtClock(s.sec)}</b> <span class="dim">${Engine.fmtPace(s.sec)}/${Engine.unitSuffix()}</span></div>`).join('')}</div>` : ''}
+      ${routeCallout(run)}
       <div class="coachcard"><div class="coachlabel">COACH</div><p>${esc(verdict)}</p></div>
       ${unlockHtml}
       <div class="btnrow">
@@ -1055,6 +1056,23 @@ function renderRunSummary(run) {
     if (cv) cv.style.display = '';
     drawRoute(run.pts);
   }
+}
+
+function routeCallout(run) {
+  const twins = Engine.routeTwins(S.runs, run);
+  if (!twins.length) return '';
+  const ord = twins.length + 1;
+  const ordStr = ord + (ord === 2 ? 'nd' : ord === 3 ? 'rd' : 'th');
+  const avgP = twins.reduce((a, r) => a + r.avgPace, 0) / twins.length;
+  const best = Math.min(...twins.map(r => r.avgPace));
+  const diff = Math.round(avgP - run.avgPace); // positive = faster today
+  const unit = Engine.unitSuffix();
+  let line;
+  if (run.avgPace <= best) line = 'Fastest you have ever run this route.';
+  else if (diff > 5) line = diff + 's/' + unit + ' quicker than your average here.';
+  else if (diff < -5) line = Math.abs(diff) + 's/' + unit + ' off your average here. The route will be there tomorrow.';
+  else line = 'Right on your average for this route.';
+  return '<div class="card"><h4>This route</h4><div class="twinline">' + ordStr + ' time here. ' + line + '</div></div>';
 }
 
 function drawRoute(pts) {
@@ -1073,7 +1091,7 @@ function drawRoute(pts) {
   ctx.lineWidth = 5;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  ctx.shadowColor = 'rgba(214,255,63,.45)';
+  ctx.shadowColor = 'rgba(255,255,255,.45)';
   ctx.shadowBlur = 14;
   ctx.beginPath();
   pts.forEach((p, i) => {
