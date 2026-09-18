@@ -727,3 +727,5 @@ header { margin-bottom: 20px; }
 .gpsrow { display: flex; align-items: center; gap: 8px; }
 
 .twinline { font-size: 14.5px; line-height: 1.55; color: var(--text); }
+
+.feelecho { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--dim); font-size: 13.5px; }
