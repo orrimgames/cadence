@@ -425,6 +425,29 @@ const VOICE = {
     return 'More than the plan asked. Bank it - and keep tomorrow honest.';
   }
 
+  // Feel correlation: close the loop between what the runner told the coach
+  // today and what the run actually showed. One honest sentence, or null.
+  function feelEcho(run, priorRuns) {
+    const f = run && run.feel;
+    if (!f || !f.anything) return null;
+    const prior = (priorRuns || []).filter(r => r.date < run.date).slice(-6);
+    const avg = prior.length >= 2 ? prior.reduce((a, r) => a + r.avgPace, 0) / prior.length : null;
+    const quicker = avg != null && run.avgPace <= avg - 5;
+    const slower = avg != null && run.avgPace >= avg + 5;
+    if (f.tired && quicker) return 'You told me you were tired, then ran quicker than your recent average. The engine is ahead of the battery gauge - noted.';
+    if (f.tired && slower) return 'Tired going in and the legs said so. You still got it done - that is the whole job.';
+    if (f.tired) return 'Tired and still out the door. Banked.';
+    if (f.sore && quicker) return 'Sore legs, quicker than usual. Soreness is not a wall - noted for next time.';
+    if (f.sore) return 'Ran on sore legs and kept it controlled. That is how you move through a build week.';
+    if (f.stressed) return 'Stress in the door, miles out the door. That trade always pays.';
+    if (f.great && quicker) return 'You said you felt great and ran like it. Two, three weeks of this and we bump things.';
+    if (f.great && slower) return 'Felt great, kept it easy anyway. Discipline on the good days is what makes them add up.';
+    if (f.great) return 'Felt great, ran steady. That is the groove we protect.';
+    if (f.sick) return 'Ran while sick - logged, but next time tell me first. Health outranks any plan.';
+    if (f.localizedPain) return 'Logged - but you ran on a ' + (f.spot || 'spot') + ' that hurt. That is the one signal we never run through. Tell me how it feels tomorrow.';
+    return null;
+  }
+
   // Weather call, straight from the treadmill opinion: outside by default -
   // the treadmill is the smart call only at real extremes (dangerous heat,
   // deep freeze, thunderstorms, unsafe wind). Otherwise adapt, don't hide.
@@ -973,7 +996,7 @@ const VOICE = {
     GOALS, DAY_NAMES, PHASES, MI, VOICE, STRENGTH, STRETCH, parseFeel, applyFeel, whySession, shoeMiles,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
-    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING, weeklyTrends, splitCue, sameRoute, routeTwins,
+    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING, weeklyTrends, splitCue, sameRoute, routeTwins, feelEcho,
     setUnits, unitSuffix, distTxt,
     nextSession, todaySession, currentWeek,
     fmtPace, fmtPaceRange, fmtClock, fmtMi, addDays, todayISO, daysBetween,
