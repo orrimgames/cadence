@@ -1020,6 +1020,10 @@ function renderRunSummary(run) {
   // Compare with planned target if matched
   const verdict = Engine.runVerdict(S.plan, S.profile, run);
   run._verdict = verdict;
+  // Attach today's feel check-in, if there was one - the run and the feeling belong together
+  const feelToday = (S.plan && S.plan.adaptLog || []).filter(a => a.feel && a.at && a.at.slice(0, 10) === run.date).slice(-1)[0];
+  if (feelToday) run.feel = Engine.parseFeel(feelToday.feel);
+  const echo = Engine.feelEcho(run, S.runs);
   const hypo = { ...S, runs: S.runs.concat([run]), badgesPr: [...new Set([...(S.badgesPr || []), ...detectPRs(run)])] };
   const seenSet = new Set(S.badgesSeen || []);
   const freshBadges = Engine.unlockedBadges(hypo).filter(b => !seenSet.has(b));
@@ -1043,7 +1047,7 @@ function renderRunSummary(run) {
       <canvas id="routecanvas" class="routecanvas" width="640" height="360" style="display:none"></canvas>
       ${run.splits.length ? `<div class="card"><h4>Splits</h4>${run.splits.map(s => `<div class="splitrow"><span>Split ${s.mi}</span><b>${Engine.fmtClock(s.sec)}</b> <span class="dim">${Engine.fmtPace(s.sec)}/${Engine.unitSuffix()}</span></div>`).join('')}</div>` : ''}
       ${routeCallout(run)}
-      <div class="coachcard"><div class="coachlabel">COACH</div><p>${esc(verdict)}</p></div>
+      <div class="coachcard"><div class="coachlabel">COACH</div><p>${esc(verdict)}</p>${echo ? `<p class="feelecho">${esc(echo)}</p>` : ''}</div>
       ${unlockHtml}
       <div class="btnrow">
         <button class="cta" onclick="saveRun('${run.id}')">Save run</button>
