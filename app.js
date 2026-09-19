@@ -1287,12 +1287,45 @@ function renderStats() {
       </div>
       <div class="card"><h4>Recent runs</h4>
         ${recent.length ? recent.map(r => `
-          <div class="runrow">
+          <div class="runrow tappable" onclick="openRun('${r.id}')">
             <div><b>${Engine.fmtMi(r.distMi)} ${Engine.unitSuffix()}</b><span>${prettyDate(r.date)}${r.manual ? ' · manual' : ''}</span></div>
             <div class="rright"><b>${Engine.fmtClock(r.durationSec)}</b><span>${Engine.fmtPace(r.avgPace)}/${Engine.unitSuffix()}</span></div>
+            <span class="rchev">&#8250;</span>
           </div>`).join('') : '<p class="dim">No runs yet. Your first one is out there waiting.</p>'}
       </div>
     </div>`;
+}
+
+function openRun(id) {
+  const run = S.runs.find(r => r.id === id);
+  if (!run) return;
+  const twins = Engine.routeTwins(S.runs, run);
+  const priors = S.runs.filter(r => r.date < run.date || (r.date === run.date && r.id !== run.id));
+  const echo = Engine.feelEcho(run, priors);
+  const bestTwinPace = twins.length ? Math.min(...twins.map(t => t.avgPace)) : null;
+  const routeBest = twins.length && run.avgPace <= bestTwinPace;
+  $('#view').innerHTML = `
+    <div class="page">
+      <header><button class="backbtn" onclick="go('stats')">&#8249;</button><h2 class="ptitle">${esc(prettyDate(run.date))}</h2></header>
+      <div class="sumhero">
+        <div class="rundist sm"><b>${run.distMi.toFixed(2)}</b><span>${Engine.unitSuffix()}</span></div>
+        <div class="rungrid">
+          <div><b>${Engine.fmtClock(run.durationSec)}</b><span>time</span></div>
+          <div><b>${Engine.fmtPace(run.avgPace)}</b><span>avg pace</span></div>
+          <div><b>${run.splits && run.splits.length || '-'}</b><span>splits</span></div>
+        </div>
+      </div>
+      <div id="detailmap" class="summap"></div>
+      ${run._verdict ? `<div class="coachcard"><div class="coachlabel">COACH</div><p>${esc(run._verdict)}</p>${echo ? `<p class="feelecho">${esc(echo)}</p>` : ''}</div>` : (echo ? `<div class="coachcard"><div class="coachlabel">COACH</div><p class="feelecho" style="border:none;margin:0;padding:0">${esc(echo)}</p></div>` : '')}
+      ${run.feel && run.feel.raw ? `<div class="card"><h4>You said</h4><div class="twinline">&ldquo;${esc(run.feel.raw)}&rdquo;</div></div>` : ''}
+      ${run.splits && run.splits.length ? `<div class="card"><h4>Splits</h4>${run.splits.map(s => `<div class="splitrow"><span>Split ${s.mi}</span><b>${Engine.fmtClock(s.sec)}</b> <span class="dim">${Engine.fmtPace(s.sec)}/${Engine.unitSuffix()}</span></div>`).join('')}</div>` : ''}
+      ${twins.length ? `<div class="card"><h4>This route</h4>
+        <div class="twinline">${twins.length + 1}${['st','nd','rd','th'][Math.min(twins.length, 3)]} time here${routeBest ? ' - and the fastest.' : '.'}</div>
+        ${twins.map(t => `<div class="splitrow"><span>${esc(prettyDate(t.date))}</span><b>${Engine.fmtMi(t.distMi)} ${Engine.unitSuffix()}</b> <span class="dim">${Engine.fmtPace(t.avgPace)}/${Engine.unitSuffix()}</span></div>`).join('')}
+      </div>` : ''}
+    </div>`;
+  mountStaticMap('detailmap', run.pts);
+  window.scrollTo(0, 0);
 }
 
 function estBest(runs, distMi) {
