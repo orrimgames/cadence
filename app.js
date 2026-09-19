@@ -1289,7 +1289,7 @@ function renderStats() {
         ${recent.length ? recent.map(r => `
           <div class="runrow tappable" onclick="openRun('${r.id}')">
             <div><b>${Engine.fmtMi(r.distMi)} ${Engine.unitSuffix()}</b><span>${prettyDate(r.date)}${r.manual ? ' · manual' : ''}</span></div>
-            <div class="rright"><b>${Engine.fmtClock(r.durationSec)}</b><span>${Engine.fmtPace(r.avgPace)}/${Engine.unitSuffix()}</span></div>
+            <div class="rright"><b>${Engine.fmtClock(r.durationSec || Math.round(r.avgPace * r.distMi))}</b><span>${Engine.fmtPace(r.avgPace)}/${Engine.unitSuffix()}</span></div>
             <span class="rchev">&#8250;</span>
           </div>`).join('') : '<p class="dim">No runs yet. Your first one is out there waiting.</p>'}
       </div>
@@ -1310,7 +1310,7 @@ function openRun(id) {
       <div class="sumhero">
         <div class="rundist sm"><b>${run.distMi.toFixed(2)}</b><span>${Engine.unitSuffix()}</span></div>
         <div class="rungrid">
-          <div><b>${Engine.fmtClock(run.durationSec)}</b><span>time</span></div>
+          <div><b>${Engine.fmtClock(run.durationSec || Math.round(run.avgPace * run.distMi))}</b><span>time</span></div>
           <div><b>${Engine.fmtPace(run.avgPace)}</b><span>avg pace</span></div>
           <div><b>${run.splits && run.splits.length || '-'}</b><span>splits</span></div>
         </div>
