@@ -425,6 +425,25 @@ const VOICE = {
     return 'More than the plan asked. Bank it - and keep tomorrow honest.';
   }
 
+  // Mid-run coach cue at the halfway point of a planned session.
+  // Feel-first: easy and long runs get no pace talk; only tempo gets numbers.
+  function midRunCue(sess, distMi, elapsedSec, vdot) {
+    if (!sess || !sess.distMi || sess.distMi < 2 || !distMi || !elapsedSec) return null;
+    const type = sess.type;
+    const avgSec = elapsedSec / distMi;
+    if (type === 'tempo') {
+      if (!vdot) return 'Halfway. Medium-hard - you could talk, but you do not want to.';
+      const t = paceZones(vdot).threshold;
+      if (avgSec < t * 0.96) return 'Halfway. A touch hot - ease back a few seconds.';
+      if (avgSec > t * 1.05) return 'Halfway. You have more - squeeze the pace down a little.';
+      return 'Halfway. Right in the zone - hold it.';
+    }
+    if (type === 'interval') return 'Halfway. Same speed, less strain.';
+    if (type === 'long') return 'Halfway. All conversational. Finish strong only if the legs say so.';
+    if (type === 'race') return 'Halfway. Even splits win. Hold this.';
+    return 'Halfway. Keep it conversational.';
+  }
+
   // Feel correlation: close the loop between what the runner told the coach
   // today and what the run actually showed. One honest sentence, or null.
   function feelEcho(run, priorRuns) {
@@ -505,7 +524,6 @@ const VOICE = {
       + (m && s ? ' ' : '')
       + (s || !m ? s + (s === 1 ? ' second' : ' seconds') : '');
     let cue = 'Mile ' + mi + '. ' + pace + '.';
-    if (targetMi && targetMi >= 3 && mi === Math.floor(targetMi / 2)) cue += ' Halfway there.';
     if (targetMi && targetMi >= 2 && mi === Math.round(targetMi) - 1) cue += ' One more mile.';
     return cue;
   }
@@ -996,7 +1014,7 @@ const VOICE = {
     GOALS, DAY_NAMES, PHASES, MI, VOICE, STRENGTH, STRETCH, parseFeel, applyFeel, whySession, shoeMiles,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
-    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING, weeklyTrends, splitCue, sameRoute, routeTwins, feelEcho,
+    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING, weeklyTrends, splitCue, sameRoute, routeTwins, feelEcho, midRunCue,
     setUnits, unitSuffix, distTxt,
     nextSession, todaySession, currentWeek,
     fmtPace, fmtPaceRange, fmtClock, fmtMi, addDays, todayISO, daysBetween,
