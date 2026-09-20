@@ -808,7 +808,7 @@ function startRun() {
   T.active = true; T.paused = false;
   T.pts = []; T.distMi = 0; T.elapsed = 0;
   T.startTs = Date.now(); T.pauseTotal = 0;
-  T.splits = []; T.lastSplitAt = 0;
+  T.splits = []; T.lastSplitAt = 0; T.halfCue = false;
   T.targetMi = T.target && T.target.distMi ? Math.round(T.target.distMi) : null;
   T.gpsState = 'searching';
   T.watchId = navigator.geolocation.watchPosition(onPos, onPosErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
@@ -859,8 +859,17 @@ function onPos(p) {
     T.splits.push(sp);
     T.lastSplitAt = T.elapsed;
     if (navigator.vibrate) navigator.vibrate([80, 60, 80]);
-    const cue = Engine.splitCue(sp.mi, sp.sec, T.targetMi);
+    let cue = Engine.splitCue(sp.mi, sp.sec, T.targetMi);
+    if (!T.halfCue && T.targetMi && T.distMi >= T.targetMi / 2) {
+      T.halfCue = true;
+      const mid = Engine.midRunCue(T.target, T.distMi, T.elapsed, S.profile && S.profile.vdot);
+      if (mid) cue = cue ? cue + ' ' + mid : mid;
+    }
     if (cue) speak(cue);
+  } else if (!T.halfCue && T.targetMi && T.distMi >= T.targetMi / 2) {
+    T.halfCue = true;
+    const mid = Engine.midRunCue(T.target, T.distMi, T.elapsed, S.profile && S.profile.vdot);
+    if (mid) speak(mid);
   }
   updateRunMap();
 }
