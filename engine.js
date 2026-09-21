@@ -425,6 +425,27 @@ const VOICE = {
     return 'More than the plan asked. Bank it - and keep tomorrow honest.';
   }
 
+  // Consistency: weeks in a row at 75%+ of scored sessions done (min 3 scored),
+  // counting only finished weeks. No guilt - just the streak.
+  function consistency(plan) {
+    if (!plan || !plan.weeks) return { streak: 0, weekDone: 0, weekTotal: 0 };
+    const today = todayISO();
+    let streak = 0;
+    for (let i = plan.weeks.length - 1; i >= 0; i--) {
+      const wk = plan.weeks[i];
+      const dates = wk.sessions.map(x => x.date).sort();
+      if (!dates.length || dates[dates.length - 1] >= today) continue; // current/future week
+      const scored = wk.sessions.filter(x => x.status === 'done' || x.status === 'missed');
+      const ok = scored.length >= 3 && scored.filter(x => x.status === 'done').length / scored.length >= 0.75;
+      if (!ok) break;
+      streak++;
+    }
+    const cur = currentWeek(plan);
+    const weekDone = cur ? cur.sessions.filter(x => x.status === 'done').length : 0;
+    const weekTotal = cur ? cur.sessions.filter(x => x.status === 'done' || x.status === 'pending' || x.status === 'missed').length : 0;
+    return { streak, weekDone, weekTotal };
+  }
+
   // Mid-run coach cue at the halfway point of a planned session.
   // Feel-first: easy and long runs get no pace talk; only tempo gets numbers.
   function midRunCue(sess, distMi, elapsedSec, vdot) {
@@ -1014,7 +1035,7 @@ const VOICE = {
     GOALS, DAY_NAMES, PHASES, MI, VOICE, STRENGTH, STRETCH, parseFeel, applyFeel, whySession, shoeMiles,
     xpForRun, totalXP, levelFromXP, maxStreak, bestMileSec, weeklyMilesMax, BADGES, unlockedBadges,
     vdotFromRace, vdotFromEasyPace, paceSecPerMi, paceZones, predictRaceTime, riegel,
-    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING, weeklyTrends, splitCue, sameRoute, routeTwins, feelEcho, midRunCue,
+    generatePlan, syncPlan, adaptPlan, repacePending, weekCompliance, applyMissChoice, weatherCall, runVerdict, raceWeek, RACE_MORNING, weeklyTrends, splitCue, sameRoute, routeTwins, feelEcho, midRunCue, consistency,
     setUnits, unitSuffix, distTxt,
     nextSession, todaySession, currentWeek,
     fmtPace, fmtPaceRange, fmtClock, fmtMi, addDays, todayISO, daysBetween,
