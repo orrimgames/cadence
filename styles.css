@@ -738,3 +738,8 @@ header { margin-bottom: 20px; }
 .rright { margin-left: auto; }
 .page header { display: flex; align-items: center; gap: 12px; }
 .page header .ptitle { margin: 0; }
+
+.consrow { display: flex; align-items: baseline; gap: 10px; margin-top: 4px; }
+.consrow b { font-size: 34px; font-weight: 850; letter-spacing: -0.02em; }
+.consrow span { font-size: 13px; color: var(--dim); }
+.consline { font-size: 13.5px; line-height: 1.5; margin-top: 8px; }
