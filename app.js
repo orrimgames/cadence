@@ -600,7 +600,10 @@ async function askSend() {
     'Week ' + wk.num + ' (' + wk.phaseLabel + ' phase), target ' + wk.targetMi + ' ' + Engine.unitSuffix() + '. Sessions: ' + wk.sessions.map(s => s.date.slice(5) + ' ' + s.title + ' ' + s.distMi + Engine.unitSuffix() + ' ' + s.status).join('; ') + '.',
     'Recent coach notes: ' + (S.plan.adaptLog.filter(x => x.reason).slice(-2).map(x => x.reason).join(' | ') || 'none') + '.',
     p.injuryNotes ? 'Watch-outs: ' + p.injuryNotes + '.' : '',
-  ].join(' ');
+    S.runs.length ? 'Recent runs: ' + S.runs.slice(-4).map(r => r.date.slice(5) + ' ' + r.distMi + Engine.unitSuffix() + ' at ' + Engine.fmtPace(r.avgPace) + '/' + Engine.unitSuffix() + (r.feel && r.feel.raw ? ' (said before: "' + String(r.feel.raw).slice(0, 60) + '")' : '')).join('; ') + '.' : 'No runs logged yet.',
+    (() => { const f = (S.plan.adaptLog || []).filter(a => a.feel && a.at && a.at.slice(0, 10) === Engine.todayISO()).slice(-1)[0]; return f ? 'Today he said: "' + String(f.feel).slice(0, 100) + '".' : ''; })(),
+    S.shoe ? 'Shoes: ' + Math.round(Engine.shoeMiles(S.runs, S.shoe.sinceISO)) + ' ' + Engine.unitSuffix() + ' on the current pair.' : '',
+  ].filter(Boolean).join(' ');
   const sys = 'You are Cadence, a world-class running coach speaking to your runner one-to-one. Voice: calm, direct, warm, no fluff, never guilt. Easy days easy so hard days can be hard; pain in one spot means stop. Answer concretely using the context. Under 90 words. Plain text, no markdown, no emdashes. Context: ' + ctx;
   const ans = await AI.cloudChat([
     { role: 'system', content: sys },
@@ -1169,6 +1172,21 @@ function saveRun(id) {
 }
 function discardRun() { window._pendingRun = null; go('today'); }
 
+function consistencyCard() {
+  const c = Engine.consistency(S.plan);
+  if (!c.weekTotal && !c.streak) return '';
+  const line = c.streak >= 2
+    ? c.streak + ' weeks in a row at 75% or better. That is how fitness actually gets built.'
+    : c.streak === 1
+      ? 'Last week banked at 75% or better. Stack another one.'
+      : 'Streaks start with one honest week. This one counts.';
+  return '<div class="card"><h4>Consistency</h4>'
+    + '<div class="consrow"><b>' + c.streak + '</b><span>week streak</span></div>'
+    + '<div class="consline">' + line + '</div>'
+    + '<div class="consline dim">This week: ' + c.weekDone + ' of ' + c.weekTotal + ' done.</div>'
+    + '</div>';
+}
+
 function trendsCard() {
   const t = Engine.weeklyTrends(S.runs);
   if (t.length < 2) return '';
@@ -1287,6 +1305,7 @@ function renderStats() {
         <div class="stat"><b>${Engine.fmtClock(totalSec)}</b><span>time running</span></div>
       </div>
       <div class="card"><h4>Weekly volume</h4><div class="barchart">${bars}</div></div>
+      ${consistencyCard()}
       ${trendsCard()}
       <div class="card"><h4>Records</h4>
         <div class="prrow"><span>Longest run</span><b>${longest ? Engine.fmtMi(longest) + ' ' + Engine.unitSuffix() : '—'}</b></div>
